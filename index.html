@@ -696,54 +696,75 @@ async function botQuery(qRaw){
   if(!rows.length) return `⚠️ ${SHEET_NAMES[src]} හි දත්ත නැහැ. (Excel Import කරලා තියෙනවද බලන්න)`;
 
   let filtered = rows.slice();
-  const desc = [];
-  
-  // Voice එකෙන් ආපු ඉඩ (spaces) අයින් කරනවා
-  const rawCompact = qRaw.replace(/\s+/g, ''); 
-  
-  // Job No හෝ Inv No හොයාගන්න (අකුරු 5කට වඩා තියෙන දේවල්)
-  const refMatch = rawCompact.match(/([A-Z0-9]{5,15})/i);
-  
-  let foundRef = false;
-  if(refMatch) {
-      const searchKey = norm(refMatch[1]);
-      // Job No සහ Inv No දෙකේම හොයනවා
-      let tempFiltered = filtered.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
+  let hasFilter = false;
+  let desc = [];
+
+  // 1. Job No / Inv No හඳුනාගැනීම (අංක අඩංගු වෙන්න ඕනේ, වාහන අංක අයින් කරනවා)
+  const idMatch = qRaw.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{4,15}\b/i);
+  if (idMatch) {
+    const matchStr = idMatch[0];
+    const isVeh = /^[A-Z]{1,3}\d{3,4}$/i.test(matchStr);
+    const isDate = /^\d{4}-\d{2}-\d{2}$/.test(matchStr);
+    const isYear = /^\d{4}$/.test(matchStr);
+
+    if(!isVeh && !isDate && !isYear) {
+      const searchKey = norm(matchStr);
+      let temp = filtered.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
       
-      if(tempFiltered.length > 0) {
-          filtered = tempFiltered;
-          foundRef = true;
-          desc.push('Ref: ' + searchKey);
-      } else if(!explicitSheet) {
-          // අනිත් Sheet එකේ තියෙනවද බලනවා
-          const otherSrc = src === 'dankotuwa' ? 'royal' : 'dankotuwa';
-          const { data: otherData } = await sb.from('records').select('*').eq('sheet', otherSrc);
-          if(otherData) {
-              tempFiltered = otherData.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
-              if(tempFiltered.length > 0) {
-                  src = otherSrc;
-                  filtered = tempFiltered;
-                  foundRef = true;
-                  desc.push('Ref: ' + searchKey);
-              }
-          }
+      if(temp.length === 0 && !explicitSheet) {
+        const otherSrc = src === 'dankotuwa' ? 'royal' : 'dankotuwa';
+        const { data: otherData } = await sb.from('records').select('*').eq('sheet', otherSrc);
+        if(otherData) {
+          temp = otherData.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
+          if(temp.length > 0) src = otherSrc;
+        }
       }
+
+      filtered = temp;
+      hasFilter = true;
+      desc.push('Search: ' + matchStr);
+
+      if(filtered.length === 0) {
+        return `❌ "${matchStr}" අංකයට අදාල කිසිදු විස්තරයක් හමු නොවිණි. කරුණාකර අංකය නිවැරදිද බලන්න.`;
+      }
+    }
   }
 
-  // අංකයක් හම්බුනේ නැත්නම් වාහන අංකයක්ද, Status එකක්ද, Seal issue එකක්ද බලනවා
-  if(!foundRef) {
-      const vm = qRaw.match(/\b([A-Za-z]{1,3})[\s\-]?(\d{3,4})\b/i);
-      if(vm) {
-          const vKey = norm(vm[1]+vm[2]);
-          filtered = filtered.filter(r => norm(r.veh_no).includes(vKey));
-          desc.push('Vehicle: '+vm[1].toUpperCase()+' '+vm[2]);
-      }
-      if(/\brtn\b|return|ආපසු/.test(q)){ filtered = filtered.filter(r => /RTN/i.test(r.job_status||'')); desc.push('RTN'); }
-      else if(/chkd|checked/.test(q)){ filtered = filtered.filter(r => /CHKD/i.test(r.job_status||'')); desc.push('CHKD'); }
-      if(/seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q)){ filtered = filtered.filter(r => /❌/.test(r.customer_seal||'')); desc.push('Seal issues'); }
+  // 2. වාහන අංක හඳුනාගැනීම (උදා: PQ 0366)
+  const vm = qRaw.match(/\b([A-Z]{1,3})[\s\-]?(\d{3,4})\b/i);
+  if(vm) {
+    const vKey = norm(vm[1]+vm[2]);
+    filtered = filtered.filter(r => norm(r.veh_no).includes(vKey));
+    hasFilter = true;
+    desc.push('Vehicle: '+vm[1].toUpperCase()+' '+vm[2]);
+    if(filtered.length === 0) return `❌ වාහන අංකය "${vm[1].toUpperCase()} ${vm[2]}" සඳහා දත්ත නැහැ.`;
+  }
+
+  // 3. Status (RTN / CHKD)
+  if(/\brtn\b|return|ආපසු/.test(q)) {
+    filtered = filtered.filter(r => /RTN/i.test(r.job_status||''));
+    hasFilter = true;
+    desc.push('Status: RTN');
+  } else if(/chkd|checked/.test(q)) {
+    filtered = filtered.filter(r => /CHKD/i.test(r.job_status||''));
+    hasFilter = true;
+    desc.push('Status: CHKD');
+  }
+
+  // 4. Seal Issues
+  if(/seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q)) {
+    filtered = filtered.filter(r => /❌/.test(r.customer_seal||''));
+    hasFilter = true;
+    desc.push('Seal issues');
   }
 
   const ftxt = desc.length ? ' `('+desc.join(', ')+')`' : '';
+
+  // අදාල දෙයක් හඳුනාගත්තේ නැත්නම් සහ සාමාන්‍ය ප්‍රශ්නයක් නෙවෙයි නම්
+  const generalKeywords = /total|sum|amount|mudal|how many|count|keeyak|kiyak|ganana|list|show|pennanna|details|which|mona|jobs/;
+  if(!hasFilter && !generalKeywords.test(q)) {
+    return `🔍 "${qRaw}" සඳහා කිසිදු දත්ත සම්බන්ධතාවයක් හඳුනාගත නොහැකි විය.\n\nකරුණාකර මේ විදියට අහන්න:\n• Inv No එකක් හෝ Job No එකක් (උදා: 183985)\n• වාහන අංකයක් (උදා: PQ 0366)\n• "total amount", "RTN jobs", "seal issues" වැනි දෙයක්.`;
+  }
 
   // Top vehicles
   if(/most|top|highest/.test(q) && /vehicle|lorry|veh/.test(q)){
@@ -765,7 +786,7 @@ async function botQuery(qRaw){
     return out;
   }
 
-  if(!filtered.length) return `🔍 "${qRaw}" සඳහා ප්‍රතිඵල නැහැ. කරුණාකර අංකය නිවැරදිද බලන්න.`;
+  if(!filtered.length) return `🔍 "${qRaw}" සඳහා ප්‍රතිඵල නැහැ.`;
 
   const t = filtered.reduce((a,r)=>a+num(r.amount),0);
   let summary = `📋 **${SHEET_NAMES[src]}**${ftxt}\nRecords: **${filtered.length}** | Total: **Rs ${money(t)}**\n\n`;
