@@ -685,7 +685,7 @@ async function botQuery(qRaw){
   const q = qRaw.toLowerCase().trim();
   if(!q) return 'ප්‍රශ්නයක් අහන්න 🙂';
   if(/^(help|උදව්|mokakda|what can)/.test(q)) return HELP_TEXT;
-  
+
   let src = cur;
   let explicitSheet = false;
   if(/royal/.test(q)) { src='royal'; explicitSheet = true; }
@@ -699,45 +699,53 @@ async function botQuery(qRaw){
   let hasFilter = false;
   let desc = [];
 
-  // 1. Job No / Inv No හඳුනාගැනීම (අංක අඩංගු වෙන්න ඕනේ, වාහන අංක අයින් කරනවා)
-  const idMatch = qRaw.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{4,15}\b/i);
-  if (idMatch) {
-    const matchStr = idMatch[0];
-    const isVeh = /^[A-Z]{1,3}\d{3,4}$/i.test(matchStr);
-    const isDate = /^\d{4}-\d{2}-\d{2}$/.test(matchStr);
-    const isYear = /^\d{4}$/.test(matchStr);
-
-    if(!isVeh && !isDate && !isYear) {
-      const searchKey = norm(matchStr);
-      let temp = filtered.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
-      
-      if(temp.length === 0 && !explicitSheet) {
-        const otherSrc = src === 'dankotuwa' ? 'royal' : 'dankotuwa';
-        const { data: otherData } = await sb.from('records').select('*').eq('sheet', otherSrc);
-        if(otherData) {
-          temp = otherData.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
-          if(temp.length > 0) src = otherSrc;
-        }
-      }
-
-      filtered = temp;
-      hasFilter = true;
-      desc.push('Search: ' + matchStr);
-
-      if(filtered.length === 0) {
-        return `❌ "${matchStr}" අංකයට අදාල කිසිදු විස්තරයක් හමු නොවිණි. කරුණාකර අංකය නිවැරදිද බලන්න.`;
-      }
-    }
-  }
-
-  // 2. වාහන අංක හඳුනාගැනීම (උදා: PQ 0366)
+  // 1. වාහන අංක මුලින්ම හඳුනාගැනීම (මේකෙන් අංක වෙනස් වෙන එක නවත්තනවා)
   const vm = qRaw.match(/\b([A-Z]{1,3})[\s\-]?(\d{3,4})\b/i);
   if(vm) {
     const vKey = norm(vm[1]+vm[2]);
     filtered = filtered.filter(r => norm(r.veh_no).includes(vKey));
     hasFilter = true;
     desc.push('Vehicle: '+vm[1].toUpperCase()+' '+vm[2]);
-    if(filtered.length === 0) return `❌ වාහන අංකය "${vm[1].toUpperCase()} ${vm[2]}" සඳහා දත්ත නැහැ.`;
+  }
+
+  // 2. Job No / Inv No හඳුනාගැනීම
+  let searchStr = qRaw;
+  if(vm) searchStr = searchStr.replace(vm[0], ''); // වාහන අංකය අයින් කරනවා
+
+  const idMatch = searchStr.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{4,15}\b/i);
+  if (idMatch) {
+    const matchStr = idMatch[0];
+    const isDate = /^\d{4}-\d{2}-\d{2}$/.test(matchStr);
+    const isYear = /^\d{4}$/.test(matchStr);
+
+    if(!isDate && !isYear) {
+      const searchKey = norm(matchStr);
+      let temp = filtered.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
+
+      // අනිත් sheet එකේ තියෙනවද බලනවා
+      if(temp.length === 0 && !explicitSheet) {
+        const otherSrc = src === 'dankotuwa' ? 'royal' : 'dankotuwa';
+        const { data: otherData } = await sb.from('records').select('*').eq('sheet', otherSrc);
+        if(otherData) {
+          let otherTemp = otherData.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
+          if(otherTemp.length > 0) {
+            temp = otherTemp;
+            src = otherSrc;
+          }
+        }
+      }
+
+      if(temp.length > 0) {
+        filtered = temp;
+        hasFilter = true;
+        desc.push('Search: ' + matchStr);
+      } else {
+         // අංකයක් තිබුනා, ඒත් හම්බුනේ නැහැ. වෙනත් ෆිල්ටර්ස් තියෙනවද බලන්න.
+         if(!hasFilter) {
+            return `❌ "${matchStr}" අංකයට අදාල කිසිදු විස්තරයක් හමු නොවිණි. කරුණාකර අංකය නිවැරදිද බලන්න හෝ වෙනත් Sheet එකක තිබේද බලන්න.`;
+         }
+      }
+    }
   }
 
   // 3. Status (RTN / CHKD)
@@ -760,7 +768,6 @@ async function botQuery(qRaw){
 
   const ftxt = desc.length ? ' `('+desc.join(', ')+')`' : '';
 
-  // අදාල දෙයක් හඳුනාගත්තේ නැත්නම් සහ සාමාන්‍ය ප්‍රශ්නයක් නෙවෙයි නම්
   const generalKeywords = /total|sum|amount|mudal|how many|count|keeyak|kiyak|ganana|list|show|pennanna|details|which|mona|jobs/;
   if(!hasFilter && !generalKeywords.test(q)) {
     return `🔍 "${qRaw}" සඳහා කිසිදු දත්ත සම්බන්ධතාවයක් හඳුනාගත නොහැකි විය.\n\nකරුණාකර මේ විදියට අහන්න:\n• Inv No එකක් හෝ Job No එකක් (උදා: 183985)\n• වාහන අංකයක් (උදා: PQ 0366)\n• "total amount", "RTN jobs", "seal issues" වැනි දෙයක්.`;
@@ -792,7 +799,6 @@ async function botQuery(qRaw){
   let summary = `📋 **${SHEET_NAMES[src]}**${ftxt}\nRecords: **${filtered.length}** | Total: **Rs ${money(t)}**\n\n`;
   return summary + formatFullDetails(filtered);
 }
-
 const HELP_TEXT = `🤖 Queries:
 • "Dankotuwa total amount?"
 • "RTN jobs keeyak?"
