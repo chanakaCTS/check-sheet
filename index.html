@@ -157,6 +157,11 @@ button.del:hover{background:#fecaca}
         <div id="chatWrap">
           <div id="chatLog"></div>
           <div id="chatInput">
+  <button id="micBtn" title="Voice Search" style="background:#0ea5e9;border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:18px;padding:0 15px;">🎤</button>
+  <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... e.g. PQ 0366">
+  <button id="ttsToggle" title="Toggle Voice" style="background:#64748b;border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:16px;padding:0 12px;">🔇</button>
+  <button id="chatSend">Ask ➤</button>
+</div>
             <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... e.g. PQ 0366 total?">
             <button id="chatSend">Ask ➤</button>
           </div>
@@ -629,7 +634,6 @@ async function botQuery(qRaw){
   const q = qRaw.toLowerCase().trim();
   if(!q) return 'ප්‍රශ්නයක් අහන්න 🙂';
   if(/^(help|උදව්|mokakda|what can)/.test(q)) return HELP_TEXT;
-  
   let src = cur;
   if(/royal/.test(q)) src='royal';
   else if(/dankotuwa|danktw|dnktw/.test(q)) src='dankotuwa';
@@ -665,10 +669,13 @@ async function botQuery(qRaw){
     let out = `📊 **${SHEET_NAMES[src]}**${ftxt}\n• Records: **${filtered.length}**\n• Amount: **Rs ${money(t)}**`;
     if(wantList && filtered.length<=20) out += '\n' + miniTable(filtered, 10);
     return out;
-  }
+  } 
   if(!filtered.length) return `🔍 "${qRaw}" — ප්‍රතිඵල නැහැ.`;
+  {
+  // අලුත් විස්තර සහ Print බටන් එක පෙන්නනවා
   const t = filtered.reduce((a,r)=>a+num(r.amount),0);
-  return `📋 **${SHEET_NAMES[src]}**${ftxt}\n${filtered.length} records | Total: Rs ${money(t)}\n` + miniTable(filtered, 12);
+  let summary = `📋 **${SHEET_NAMES[src]}**${ftxt}\nRecords: **${filtered.length}** | Total: **Rs ${money(t)}**\n\n`;
+  return summary + formatFullDetails(filtered);
 }
 
 const HELP_TEXT = `🤖 Queries:
@@ -726,6 +733,8 @@ async function sendChat(){
     let ans = await Promise.race([handleChat(q), timeoutPromise]);
     if(typeof ans !== 'string') ans = String(ans);
     loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+        loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+    speakText(ans); // <--- මේක අලුතින් එකතු කරන්න
   } catch(e) { 
     loading.innerHTML = '❌ Error: ' + esc(e.message);
     console.error(e);
@@ -749,8 +758,133 @@ function renderAll(){
   if($('#tab-dash').classList.contains('active')) renderDash();
   if($('#tab-grid').classList.contains('active')) renderGrid();
 }
+let ttsEnabled = false;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+// Speaker Toggle
+$('#ttsToggle').addEventListener('click', () => {
+  ttsEnabled = !ttsEnabled;
+  $('#ttsToggle').innerText = ttsEnabled ? '🔊' : '🔇';
+  $('#ttsToggle').style.background = ttsEnabled ? '#15803d' : '#64748b';
+  if(ttsEnabled) speakText("Voice output enabled");
+});
+
+function speakText(text) {
+  if(!ttsEnabled) return;
+  window.speechSynthesis.cancel();
+  // Markdown සහ Emojis අයින් කරලා කියවන්න
+  let clean = text.replace(/[*#•]/g, '').replace(/<[^>]*>/g, '').replace(/Rs/g, 'Rupees ');
+  const utt = new SpeechSynthesisUtterance(clean);
+  utt.lang = 'en-US'; // Sinhala ඕන නම් 'si-LK' දාන්න
+  utt.rate = 1.0;
+  window.speechSynthesis.speak(utt);
+}
+
+// Mic (Speech to Text)
+if(SpeechRecognition) {
+  const recog = new SpeechRecognition();
+  recog.lang = 'en-US';
+  recog.interimResults = false;
+  recog.maxAlternatives = 1;
+  
+  $('#micBtn').addEventListener('click', () => {
+    $('#micBtn').style.background = '#dc2626'; // Red while recording
+    $('#chatBox').placeholder = "🎤 අහගෙන ඉන්නවා...";
+    recog.start();
+  });
+
+  recog.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    $('#chatBox').value = text;
+    $('#micBtn').style.background = '#0ea5e9';
+    $('#chatBox').placeholder = "ප්‍රශ්නයක් අහන්න... e.g. PQ 0366";
+    sendChat();
+  };
+  
+  recog.onspeechend = () => recog.stop();
+  recog.onerror = () => { 
+    $('#micBtn').style.background = '#0ea5e9'; 
+    alert("Mic error: කරුණාකර Chrome බ්‍රව්සර් එක පාවිච්චි කරන්න.");
+  };
+} else {
+  $('#micBtn').style.display = 'none';
+}
 initAuth();
 </script>
 </body>
 </html>
+function formatFullDetails(rows) {
+  if (rows.length === 0) return "";
+  if (rows.length === 1) {
+    const r = rows[0];
+    return `📄 **Details for INV: ${r.inv_no}**\n\n` +
+           `• **Job No:** ${r.job_no || '-'}\n` +
+           `• **Job Date:** ${r.jb_date || '-'}\n` +
+           `• **Veh No:** ${r.veh_no || '-'}\n` +
+           `• **Customer:** ${r.customer || '-'}\n` +
+           `• **Inv No:** ${r.inv_no || '-'}\n` +
+           `• **Chk Date:** ${r.chk_date || '-'}\n` +
+           `• **Remarks:** ${r.remarks || '-'}\n` +
+           `• **Job Status:** ${r.job_status || '-'}\n` +
+           `• **Handover To:** ${r.handover_to || '-'}`;
+  }
+  
+  // එකකට වඩා තියෙනවා නම් Table එකක් හදනවා + Print Button එකක්
+  let tableHtml = `<table style="width:100%;font-size:12px;margin-top:10px;border-collapse:collapse" border="1">
+    <thead><tr style="background:#e2e8f0">
+      <th>Job No</th><th>Date</th><th>Veh</th><th>Customer</th><th>Inv No</th><th>Status</th>
+    </tr></thead><tbody>`;
+  rows.forEach(r => {
+    tableHtml += `<tr>
+      <td>${esc(r.job_no||'-')}</td><td>${esc(r.jb_date||'-')}</td>
+      <td>${esc(r.veh_no||'-')}</td><td>${esc(r.customer||'-')}</td>
+      <td>${esc(r.inv_no||'-')}</td><td>${esc(r.job_status||'-')}</td>
+    </tr>`;
+  });
+  tableHtml += `</tbody></table>`;
+  
+  const printBtnId = 'print_btn_' + Date.now();
+  setTimeout(() => {
+    const btn = document.getElementById(printBtnId);
+    if(btn) btn.onclick = () => printTable(rows);
+  }, 100);
+
+  return `📋 Found **${rows.length}** records.<br>` +
+         `<button id="${printBtnId}" style="margin-top:8px;padding:5px 10px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">🖨️ Print Results</button>` +
+         tableHtml;
+}
+
+function printTable(rows) {
+  let html = `<html><head><title>Print Report</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #000; padding: 6px; text-align: left; }
+    th { background: #ddd; }
+  </style></head><body>
+  <h2>Check Sheet Report - ${SHEET_NAMES[cur]}</h2>
+  <p>Date: ${new Date().toLocaleDateString()}</p>
+  <table><tr>
+    <th>Job No</th><th>Job Date</th><th>Veh No</th><th>Customer</th><th>Inv No</th>
+    <th>Chk Date</th><th>Remarks</th><th>Job Status</th><th>Handover To</th>
+  </tr>`;
+  
+  rows.forEach(r => {
+    html += `<tr>
+      <td>${esc(r.job_no||'')}</td><td>${esc(r.jb_date||'')}</td><td>${esc(r.veh_no||'')}</td>
+      <td>${esc(r.customer||'')}</td><td>${esc(r.inv_no||'')}</td><td>${esc(r.chk_date||'')}</td>
+      <td>${esc(r.remarks||'')}</td><td>${esc(r.job_status||'')}</td><td>${esc(r.handover_to||'')}</td>
+    </tr>`;
+  });
+  html += `</table></body></html>`;
+  
+  const win = window.open('', '', 'width=1000,height=800');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); win.close(); }, 500);
+}
+
+
+
+
