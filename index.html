@@ -709,8 +709,8 @@ function addMsg(text, who){
   div.innerHTML = who==='bot' ? text.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>') : esc(text);
   $('#chatLog').appendChild(div);
   $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
+  return div; // <--- මේ පේළිය අලුතින් එකතු කරන්න
 }
-
 async function sendChat(){
   const box = $('#chatBox'), q = box.value.trim();
   if(!q) return;
