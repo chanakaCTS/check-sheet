@@ -618,14 +618,15 @@ function printTable(rows) {
     th, td { border: 1px solid #000; padding: 6px; text-align: left; }
     th { background: #ddd; }
   </style></head><body>
-  <h2>Check Sheet Report - ${SHEET_NAMES[cur]}</h2>
+  <h2>Check Sheet Report</h2>
   <p>Date: ${new Date().toLocaleDateString()}</p>
   <table><tr>
-    <th>Job No</th><th>Job Date</th><th>Veh No</th><th>Customer</th><th>Inv No</th>
+    <th>Sheet</th><th>Job No</th><th>Job Date</th><th>Veh No</th><th>Customer</th><th>Inv No</th>
     <th>Chk Date</th><th>Remarks</th><th>Job Status</th><th>Handover To</th>
   </tr>`;
   rows.forEach(r => {
     html += `<tr>
+      <td>${r._sheet ? SHEET_NAMES[r._sheet] : ''}</td>
       <td>${esc(r.job_no||'')}</td><td>${esc(r.jb_date||'')}</td><td>${esc(r.veh_no||'')}</td>
       <td>${esc(r.customer||'')}</td><td>${esc(r.inv_no||'')}</td><td>${esc(r.chk_date||'')}</td>
       <td>${esc(r.remarks||'')}</td><td>${esc(r.job_status||'')}</td><td>${esc(r.handover_to||'')}</td>
@@ -639,13 +640,13 @@ function printTable(rows) {
   win.focus();
   setTimeout(() => { win.print(); win.close(); }, 500);
 }
-
 // -------- Format Full Details --------
 function formatFullDetails(rows) {
   if (rows.length === 0) return "";
   if (rows.length === 1) {
     const r = rows[0];
-    return `📄 **Details for INV: ${r.inv_no}**\n\n` +
+    const sheetName = r._sheet ? SHEET_NAMES[r._sheet] : '';
+    return `📄 **Details for ${sheetName} INV: ${r.inv_no}**\n\n` +
            `• **Job No:** ${r.job_no || '-'}\n` +
            `• **Job Date:** ${r.jb_date || '-'}\n` +
            `• **Veh No:** ${r.veh_no || '-'}\n` +
@@ -659,10 +660,12 @@ function formatFullDetails(rows) {
   
   let tableHtml = `<div style="overflow-x:auto"><table style="width:100%;font-size:12px;margin-top:10px;border-collapse:collapse;border:1px solid #e2e8f0">
     <thead><tr style="background:#f1f5f9">
+      <th style="padding:5px;border:1px solid #e2e8f0">Sheet</th>
       <th style="padding:5px;border:1px solid #e2e8f0">Job No</th><th style="padding:5px;border:1px solid #e2e8f0">Date</th><th style="padding:5px;border:1px solid #e2e8f0">Veh</th><th style="padding:5px;border:1px solid #e2e8f0">Customer</th><th style="padding:5px;border:1px solid #e2e8f0">Inv No</th><th style="padding:5px;border:1px solid #e2e8f0">Status</th>
     </tr></thead><tbody>`;
   rows.forEach(r => {
     tableHtml += `<tr>
+      <td style="padding:5px;border:1px solid #e2e8f0">${r._sheet ? SHEET_NAMES[r._sheet] : ''}</td>
       <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.job_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.jb_date||'-')}</td>
       <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.veh_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.customer||'-')}</td>
       <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.inv_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.job_status||'-')}</td>
@@ -680,106 +683,85 @@ function formatFullDetails(rows) {
          `<button id="${printBtnId}" style="margin-top:8px;padding:6px 12px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600">🖨️ Print Results</button>` +
          tableHtml;
 }
+}
 
 async function botQuery(qRaw){
   const q = qRaw.toLowerCase().trim();
   if(!q) return 'ප්‍රශ්නයක් අහන්න 🙂';
   if(/^(help|උදව්|mokakda|what can)/.test(q)) return HELP_TEXT;
+  
+  let searchRoyal = true;
+  let searchDankotuwa = true;
+  if(/royal/.test(q)) { searchDankotuwa = false; }
+  else if(/dankotuwa|danktw|dnktw/.test(q)) { searchRoyal = false; }
 
-  let src = cur;
-  let explicitSheet = false;
-  if(/royal/.test(q)) { src='royal'; explicitSheet = true; }
-  else if(/dankotuwa|danktw|dnktw/.test(q)) { src='dankotuwa'; explicitSheet = true; }
-
-  let { data } = await sb.from('records').select('*').eq('sheet', src);
-  let rows = data || [];
-  if(!rows.length) return `⚠️ ${SHEET_NAMES[src]} හි දත්ත නැහැ. (Excel Import කරලා තියෙනවද බලන්න)`;
-
-  let filtered = rows.slice();
-  let hasFilter = false;
-  let desc = [];
-
-  // 1. වාහන අංක මුලින්ම හඳුනාගැනීම (මේකෙන් අංක වෙනස් වෙන එක නවත්තනවා)
+  let qFilters = [];
   const vm = qRaw.match(/\b([A-Z]{1,3})[\s\-]?(\d{3,4})\b/i);
-  if(vm) {
-    const vKey = norm(vm[1]+vm[2]);
-    filtered = filtered.filter(r => norm(r.veh_no).includes(vKey));
-    hasFilter = true;
-    desc.push('Vehicle: '+vm[1].toUpperCase()+' '+vm[2]);
-  }
+  let vKey = null;
+  if(vm) vKey = norm(vm[1]+vm[2]);
 
-  // 2. Job No / Inv No හඳුනාගැනීම
   let searchStr = qRaw;
-  if(vm) searchStr = searchStr.replace(vm[0], ''); // වාහන අංකය අයින් කරනවා
-
+  if(vm) searchStr = searchStr.replace(vm[0], '');
   const idMatch = searchStr.match(/\b(?=[A-Z0-9]*\d)[A-Z0-9]{4,15}\b/i);
+  let searchKey = null;
   if (idMatch) {
     const matchStr = idMatch[0];
     const isDate = /^\d{4}-\d{2}-\d{2}$/.test(matchStr);
     const isYear = /^\d{4}$/.test(matchStr);
-
-    if(!isDate && !isYear) {
-      const searchKey = norm(matchStr);
-      let temp = filtered.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
-
-      // අනිත් sheet එකේ තියෙනවද බලනවා
-      if(temp.length === 0 && !explicitSheet) {
-        const otherSrc = src === 'dankotuwa' ? 'royal' : 'dankotuwa';
-        const { data: otherData } = await sb.from('records').select('*').eq('sheet', otherSrc);
-        if(otherData) {
-          let otherTemp = otherData.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
-          if(otherTemp.length > 0) {
-            temp = otherTemp;
-            src = otherSrc;
-          }
-        }
-      }
-
-      if(temp.length > 0) {
-        filtered = temp;
-        hasFilter = true;
-        desc.push('Search: ' + matchStr);
-      } else {
-         // අංකයක් තිබුනා, ඒත් හම්බුනේ නැහැ. වෙනත් ෆිල්ටර්ස් තියෙනවද බලන්න.
-         if(!hasFilter) {
-            return `❌ "${matchStr}" අංකයට අදාල කිසිදු විස්තරයක් හමු නොවිණි. කරුණාකර අංකය නිවැරදිද බලන්න හෝ වෙනත් Sheet එකක තිබේද බලන්න.`;
-         }
-      }
-    }
+    if(!isDate && !isYear) searchKey = norm(matchStr);
   }
 
-  // 3. Status (RTN / CHKD)
-  if(/\brtn\b|return|ආපසු/.test(q)) {
-    filtered = filtered.filter(r => /RTN/i.test(r.job_status||''));
-    hasFilter = true;
-    desc.push('Status: RTN');
-  } else if(/chkd|checked/.test(q)) {
-    filtered = filtered.filter(r => /CHKD/i.test(r.job_status||''));
-    hasFilter = true;
-    desc.push('Status: CHKD');
-  }
+  const isRTN = /\brtn\b|return|ආපසු/.test(q);
+  const isCHKD = /chkd|checked/.test(q);
+  const isSeal = /seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q);
 
-  // 4. Seal Issues
-  if(/seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q)) {
-    filtered = filtered.filter(r => /❌/.test(r.customer_seal||''));
-    hasFilter = true;
-    desc.push('Seal issues');
-  }
-
-  const ftxt = desc.length ? ' `('+desc.join(', ')+')`' : '';
+  let globalHasFilter = vKey || searchKey || isRTN || isCHKD || isSeal;
 
   const generalKeywords = /total|sum|amount|mudal|how many|count|keeyak|kiyak|ganana|list|show|pennanna|details|which|mona|jobs/;
-  if(!hasFilter && !generalKeywords.test(q)) {
+  if(!globalHasFilter && !generalKeywords.test(q)) {
     return `🔍 "${qRaw}" සඳහා කිසිදු දත්ත සම්බන්ධතාවයක් හඳුනාගත නොහැකි විය.\n\nකරුණාකර මේ විදියට අහන්න:\n• Inv No එකක් හෝ Job No එකක් (උදා: 183985)\n• වාහන අංකයක් (උදා: PQ 0366)\n• "total amount", "RTN jobs", "seal issues" වැනි දෙයක්.`;
   }
 
-  // Top vehicles
+  let allFiltered = [];
+  let desc = [];
+
+  async function processSheet(sheetName) {
+    const { data } = await sb.from('records').select('*').eq('sheet', sheetName);
+    if(!data || !data.length) return;
+    
+    let f = data;
+    if(vKey) f = f.filter(r => norm(r.veh_no).includes(vKey));
+    if(searchKey) f = f.filter(r => norm(r.inv_no).includes(searchKey) || norm(r.job_no).includes(searchKey));
+    if(isRTN) f = f.filter(r => /RTN/i.test(r.job_status||''));
+    if(isCHKD) f = f.filter(r => /CHKD/i.test(r.job_status||''));
+    if(isSeal) f = f.filter(r => /❌/.test(r.customer_seal||''));
+
+    if(f.length > 0) {
+      allFiltered = allFiltered.concat(f.map(r => ({...r, _sheet: sheetName})));
+    }
+  }
+
+  if(searchDankotuwa) await processSheet('dankotuwa');
+  if(searchRoyal) await processSheet('royal');
+
+  if(vKey) desc.push('Vehicle: '+vm[1].toUpperCase()+' '+vm[2]);
+  if(searchKey) desc.push('Search: ' + idMatch[0]);
+  if(isRTN) desc.push('Status: RTN');
+  if(isCHKD) desc.push('Status: CHKD');
+  if(isSeal) desc.push('Seal issues');
+
+  const ftxt = desc.length ? ' `('+desc.join(', ')+')`' : '';
+
+  if(globalHasFilter && allFiltered.length === 0) {
+    return `❌ "${qRaw}" සඳහා කිසිදු විස්තරයක් හමු නොවිණි. (කරුණාකර අංකය නිවැරදිද බලන්න)`;
+  }
+
   if(/most|top|highest/.test(q) && /vehicle|lorry|veh/.test(q)){
     const m = {};
-    filtered.forEach(r => { const v = String(r.veh_no||'').trim().toUpperCase(); if(v) m[v]=(m[v]||0)+1; });
+    allFiltered.forEach(r => { const v = String(r.veh_no||'').trim().toUpperCase(); if(v) m[v]=(m[v]||0)+1; });
     const s = Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);
     if(!s.length) return 'දත්ත නැහැ.';
-    return `🚚 Top vehicles — ${SHEET_NAMES[src]}${ftxt}\n\n` + s.map(([v,c],i)=>`${i+1}. **${v}** — ${c}`).join('\n');
+    return `🚚 Top vehicles${ftxt}\n\n` + s.map(([v,c],i)=>`${i+1}. **${v}** — ${c}`).join('\n');
   }
 
   const wantSum = /total|sum|amount|mudal/.test(q);
@@ -787,19 +769,16 @@ async function botQuery(qRaw){
   const wantList = /list|show|pennanna|details|which|mona/.test(q);
 
   if(wantSum || wantCount){
-    const t = filtered.reduce((a,r)=>a+num(r.amount),0);
-    let out = `📊 **${SHEET_NAMES[src]}**${ftxt}\n• Records: **${filtered.length}**\n• Amount: **Rs ${money(t)}**`;
-    if(wantList && filtered.length<=20) out += '\n\n' + formatFullDetails(filtered);
+    const t = allFiltered.reduce((a,r)=>a+num(r.amount),0);
+    let out = `📊 **Results**${ftxt}\n• Records: **${allFiltered.length}**\n• Amount: **Rs ${money(t)}**`;
+    if(wantList && allFiltered.length<=20) out += '\n\n' + formatFullDetails(allFiltered);
     return out;
   }
 
-  if(!filtered.length) return `🔍 "${qRaw}" සඳහා ප්‍රතිඵල නැහැ.`;
-
-  const t = filtered.reduce((a,r)=>a+num(r.amount),0);
-  let summary = `📋 **${SHEET_NAMES[src]}**${ftxt}\nRecords: **${filtered.length}** | Total: **Rs ${money(t)}**\n\n`;
-  return summary + formatFullDetails(filtered);
-}
-const HELP_TEXT = `🤖 Queries:
+  const t = allFiltered.reduce((a,r)=>a+num(r.amount),0);
+  let summary = `📋 **Results**${ftxt}\nRecords: **${allFiltered.length}** | Total: **Rs ${money(t)}**\n\n`;
+  return summary + formatFullDetails(allFiltered);
+}const HELP_TEXT = `🤖 Queries:
 • "Dankotuwa total amount?"
 • "RTN jobs keeyak?"
 • "PQ 0366 jobs pennanna"
