@@ -54,7 +54,7 @@ button.del:hover{background:#fecaca}
 .pager{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px}
 .pager button{padding:6px 13px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px}
 .pager button:disabled{opacity:.4;cursor:default}
-#chatWrap{display:flex;flex-direction:column;height:calc(100vh - 240px);min-height:420px}
+#chatWrap{display:flex;flex-direction:column;height:calc(100vh - 260px);min-height:400px}
 #chatLog{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:10px}
 .msg{max-width:88%;padding:10px 14px;border-radius:14px;line-height:1.55;font-size:13.5px;white-space:pre-wrap;word-wrap:break-word}
 .msg.user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
@@ -164,7 +164,7 @@ button.del:hover{background:#fecaca}
           <div id="chatLog"></div>
           <div id="chatInput">
             <button id="micBtn" title="Voice Search">🎤</button>
-            <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... හෝ 'new job' කියන්න">
+            <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... (උදා: 183985)">
             <button id="ttsToggle" title="Toggle Voice">🔇</button>
             <button id="chatSend">Ask ➤</button>
           </div>
@@ -383,7 +383,7 @@ $$('nav button').forEach(btn => btn.addEventListener('click', async () => {
     if(t==='bot'){
       updateBotChips();
       if(!$('#chatLog').children.length) addMsg('👋 ආයුබෝවන්! මම Check Sheet Assistant.\n\n' +
-        '🔹 **Queries:** "Dankotuwa total", "183985", "RTN jobs"\n' +
+        '🔹 **Search:** Job No එකක් හෝ Inv No එකක් type කරන්න (උදා: 183985)\n' +
         (role==='admin' ? '🔹 **New Job:** උඩ තියෙන "➕ Start New Job" බටන් එක ඔබන්න.\n' : '') +
         '\n"help" type කරලා බලන්න 🤖', 'bot');
     }
@@ -398,6 +398,7 @@ $('#fileXlsx')?.addEventListener('change', e => {
     try {
       const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
       const results = [];
+      
       for(const sn of wb.SheetNames){
         let key = null;
         if(/royal/i.test(sn)) key = 'royal';
@@ -405,15 +406,27 @@ $('#fileXlsx')?.addEventListener('change', e => {
         if(!key) continue;
         
         const rows = parseSheet(wb.Sheets[sn]);
-        if(rows.length === 0) { results.push(`${SHEET_NAMES[key]}: 0 rows (Error: Data not found or Format wrong)`); continue; }
+        if(rows.length === 0) { results.push(`${SHEET_NAMES[key]}: 0 rows (Data not found)`); continue; }
         
         await sb.from('records').delete().eq('sheet', key);
-        for(let i=0; i<rows.length; i+=200){
-          const batch = rows.slice(i, i+200).map(r => ({sheet:key, ...r}));
+        let successCount = 0;
+        
+        // Batch insert with fallback to individual rows to prevent total failure
+        for(let i=0; i<rows.length; i+=50){
+          const batch = rows.slice(i, i+50).map(r => ({sheet:key, ...r}));
           const { error } = await sb.from('records').insert(batch);
-          if(error) throw error;
+          
+          if(error) {
+             // If batch fails, try inserting one by one
+             for(const row of batch) {
+                 const { error: e2 } = await sb.from('records').insert(row);
+                 if(!e2) successCount++;
+             }
+          } else {
+             successCount += batch.length;
+          }
         }
-        results.push(`${SHEET_NAMES[key]}: ${rows.length} rows imported ✅`);
+        results.push(`${SHEET_NAMES[key]}: ${successCount} rows imported ✅`);
       }
       await loadRecords();
       renderAll();
@@ -583,11 +596,9 @@ async function botQuery(qRaw){
   if(!q) return 'ප්‍රශ්නයක් අහන්න 🙂';
   if(/^(help|උදව්|mokakda|what can)/.test(q)) return HELP_TEXT;
 
-  const { data: d1, error: e1 } = await sb.from('records').select('*').eq('sheet', 'dankotuwa').limit(50000);
-  const { data: d2, error: e2 } = await sb.from('records').select('*').eq('sheet', 'royal').limit(50000);
+  const { data: d1 } = await sb.from('records').select('*').eq('sheet', 'dankotuwa').limit(50000);
+  const { data: d2 } = await sb.from('records').select('*').eq('sheet', 'royal').limit(50000);
   
-  if(e1 || e2) return '❌ Database Error: ' + (e1?e1.message:e2.message);
-
   let allData = [];
   if(d1) allData = allData.concat(d1.map(r => ({...r, _sheet: 'dankotuwa'})));
   if(d2) allData = allData.concat(d2.map(r => ({...r, _sheet: 'royal'})));
@@ -597,19 +608,15 @@ async function botQuery(qRaw){
   let filtered = allData;
   let desc = [];
 
-  // Smart Search (Look for numbers >= 3 digits)
+  // Extremely powerful search: look for the number anywhere in the row
   const searchTerms = qRaw.match(/[a-zA-Z0-9]+/g) || [];
   const numTerms = searchTerms.filter(t => t.length >= 3);
   
   if (numTerms.length > 0) {
       filtered = allData.filter(r => {
-          const matchInv = norm(r.inv_no);
-          const matchJob = norm(r.job_no);
-          const matchVeh = norm(r.veh_no);
-          return numTerms.some(term => {
-              const t = norm(term);
-              return matchInv.includes(t) || matchJob.includes(t) || matchVeh.includes(t);
-          });
+          // stringify the whole row and remove spaces
+          const rowStr = norm(JSON.stringify(r));
+          return numTerms.some(term => rowStr.includes(norm(term)));
       });
       if (filtered.length < allData.length) desc.push('Search: ' + numTerms.join(' '));
   }
@@ -734,7 +741,7 @@ async function handleChat(q){
   if(lower.includes('new job') || lower.includes('add job') || lower.includes('new entry') || lower.includes('අලුත් ජොබ්')){
     if(role!=='admin') return '🔒 Admin only.';
     startNewEntry();
-    return null; // Handled inside startNewEntry
+    return null;
   }
 
   return await botQuery(q);
@@ -757,7 +764,7 @@ async function sendChat(){
   
   try {
     let ans = await handleChat(q);
-    if(ans === null) { loading.remove(); return; } // For new entry start
+    if(ans === null) { loading.remove(); return; }
     if(typeof ans !== 'string') ans = String(ans);
     loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
     speakText(ans);
@@ -771,9 +778,7 @@ $('#chatSend')?.addEventListener('click', sendChat);
 $('#chatBox')?.addEventListener('keydown', e => { if(e.key==='Enter') sendChat(); });
 
 function updateBotChips(){
-  const chips = role==='admin'
-    ? ['Dankotuwa total', '183985', 'RTN jobs', 'Seal issues', 'help']
-    : ['Dankotuwa total', '183985', 'RTN jobs', 'Seal issues', 'help'];
+  const chips = ['Dankotuwa total', '183985', 'RTN jobs', 'Seal issues', 'help'];
   $('#chips').innerHTML = chips.map(c => `<span class="chip">${esc(c)}</span>`).join('');
   $$('#chips .chip').forEach(ch => ch.addEventListener('click', () => {
     $('#chatBox').value = ch.textContent; sendChat();
@@ -815,7 +820,7 @@ if(SpeechRecognition) {
     const text = e.results[0][0].transcript;
     $('#chatBox').value = text;
     $('#micBtn').style.background = '#0ea5e9';
-    $('#chatBox').placeholder = "ප්‍රශ්නයක් අහන්න... e.g. PQ 0366";
+    $('#chatBox').placeholder = "ප්‍රශ්නයක් අහන්න... (උදා: 183985)";
     sendChat();
   };
   
