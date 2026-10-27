@@ -54,7 +54,7 @@ button.del:hover{background:#fecaca}
 .pager{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px}
 .pager button{padding:6px 13px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px}
 .pager button:disabled{opacity:.4;cursor:default}
-#chatWrap{display:flex;flex-direction:column;height:calc(100vh - 220px);min-height:420px}
+#chatWrap{display:flex;flex-direction:column;height:calc(100vh - 240px);min-height:420px}
 #chatLog{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:10px}
 .msg{max-width:88%;padding:10px 14px;border-radius:14px;line-height:1.55;font-size:13.5px;white-space:pre-wrap;word-wrap:break-word}
 .msg.user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
@@ -113,7 +113,7 @@ button.del:hover{background:#fecaca}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <label id="importWrap" class="btn">📁 Import Excel<input type="file" id="fileXlsx" accept=".xlsx,.xls" hidden></label>
-      <button id="btnAdd" class="btn">➕ New</button>
+      <button id="btnAdd" class="btn">➕ Manual Add</button>
       <button id="btnExport" class="btn">⬇ Export</button>
       <button onclick="doLogout()" class="btn ghost">Logout</button>
     </div>
@@ -156,6 +156,10 @@ button.del:hover{background:#fecaca}
     </section>
     <section id="tab-bot" class="tab">
       <div class="card" style="padding:14px">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
+          <h3 style="margin:0">🤖 AI Assistant</h3>
+          <button id="btnAiNewJob" style="background:#15803d;color:#fff;border:none;padding:8px 15px;border-radius:8px;cursor:pointer;font-weight:bold;display:none">➕ Start New Job</button>
+        </div>
         <div id="chatWrap">
           <div id="chatLog"></div>
           <div id="chatInput">
@@ -236,6 +240,7 @@ function applyRoleUI() {
   const admin = role === 'admin';
   $('#importWrap').style.display = admin ? 'inline-flex' : 'none';
   $('#btnAdd').style.display = admin ? 'inline-flex' : 'none';
+  $('#btnAiNewJob').style.display = admin ? 'block' : 'none';
 }
 function showLoginScreen(){ $('#loading').style.display='none'; $('#loginScreen').style.display='block'; $('#appScreen').style.display='none'; }
 function showAppScreen(){ $('#loading').style.display='none'; $('#loginScreen').style.display='none'; $('#appScreen').style.display='block'; renderAll(); }
@@ -319,14 +324,14 @@ document.addEventListener('click', async e => {
 });
 
 // ================================================================
-// NEW ENTRY MODAL (Manual)
+// MANUAL NEW ENTRY
 // ================================================================
 $('#btnAdd')?.addEventListener('click', () => {
   if(role !== 'admin') return;
   const html = FIELDS.map(f => `<label>${esc(f)}<input data-k="${FIELD_KEYS[f]}"></label>`).join('');
   const modal = document.createElement('div');
   modal.className = 'modal';
-  modal.innerHTML = `<div class="modal-box"><h3>➕ New Job</h3>
+  modal.innerHTML = `<div class="modal-box"><h3>➕ Manual Add Job</h3>
     <label style="font-weight:bold;margin-bottom:10px;display:block">Select Sheet:
       <select id="modalSheet" style="padding:8px;border-radius:6px;margin-top:5px;width:100%;max-width:300px">
         <option value="dankotuwa" ${cur==='dankotuwa'?'selected':''}>Dankotuwa old</option>
@@ -378,8 +383,8 @@ $$('nav button').forEach(btn => btn.addEventListener('click', async () => {
     if(t==='bot'){
       updateBotChips();
       if(!$('#chatLog').children.length) addMsg('👋 ආයුබෝවන්! මම Check Sheet Assistant.\n\n' +
-        '🔹 **Queries:** "Dankotuwa total amount?", "PQ 0366", "RTN jobs"\n' +
-        (role==='admin' ? '🔹 **New Job:** "new job" කියලා type කරන්න හෝ කතා කරන්න (Voice auto-fill)\n' : '') +
+        '🔹 **Queries:** "Dankotuwa total", "183985", "RTN jobs"\n' +
+        (role==='admin' ? '🔹 **New Job:** උඩ තියෙන "➕ Start New Job" බටන් එක ඔබන්න.\n' : '') +
         '\n"help" type කරලා බලන්න 🤖', 'bot');
     }
   }
@@ -398,19 +403,22 @@ $('#fileXlsx')?.addEventListener('change', e => {
         if(/royal/i.test(sn)) key = 'royal';
         else if(/dankotuwa|danktw|dnktw/i.test(sn)) key = 'dankotuwa';
         if(!key) continue;
+        
         const rows = parseSheet(wb.Sheets[sn]);
+        if(rows.length === 0) { results.push(`${SHEET_NAMES[key]}: 0 rows (Error: Data not found or Format wrong)`); continue; }
+        
         await sb.from('records').delete().eq('sheet', key);
         for(let i=0; i<rows.length; i+=200){
           const batch = rows.slice(i, i+200).map(r => ({sheet:key, ...r}));
           const { error } = await sb.from('records').insert(batch);
           if(error) throw error;
         }
-        results.push(`${SHEET_NAMES[key]}: ${rows.length} rows`);
+        results.push(`${SHEET_NAMES[key]}: ${rows.length} rows imported ✅`);
       }
       await loadRecords();
       renderAll();
-      alert('✅ Import OK!\n\n' + results.join('\n'));
-    } catch(err){ alert('❌ ' + err.message); }
+      alert('Import Results:\n\n' + results.join('\n'));
+    } catch(err){ alert('❌ Import Error: ' + err.message); }
   };
   rd.readAsArrayBuffer(file);
   e.target.value = '';
@@ -429,7 +437,7 @@ function parseSheet(ws){
     FIELDS.forEach((f,j)=>{ o[FIELD_KEYS[f]] = r[j]==null?'':String(r[j]).trim(); });
     const jn = String(o.job_no||'').toUpperCase();
     if(jn==='JOB NO' || jn==='CUS & CODE' || jn==='CUS AND CODE') continue;
-    if(!o.inv_no && !o.amount && !o.veh_no && !o.job_no && !o.customer_seal) continue;
+    if(!o.inv_no && !o.amount && !o.veh_no && !o.job_no) continue;
     out.push(o);
   }
   return out;
@@ -498,7 +506,7 @@ async function renderDash(){
 }
 
 // ================================================================
-// AI BOT, VOICE & NEW ENTRY WIZARD
+// AI BOT & SEARCH
 // ================================================================
 function printTable(rows) {
   let html = `<html><head><title>Print Report</title>
@@ -570,15 +578,16 @@ function formatFullDetails(rows) {
          tableHtml;
 }
 
-// ---------------- BOT QUERY LOGIC ----------------
 async function botQuery(qRaw){
   const q = qRaw.toLowerCase().trim();
   if(!q) return 'ප්‍රශ්නයක් අහන්න 🙂';
   if(/^(help|උදව්|mokakda|what can)/.test(q)) return HELP_TEXT;
 
-  const { data: d1 } = await sb.from('records').select('*').eq('sheet', 'dankotuwa').limit(50000);
-  const { data: d2 } = await sb.from('records').select('*').eq('sheet', 'royal').limit(50000);
+  const { data: d1, error: e1 } = await sb.from('records').select('*').eq('sheet', 'dankotuwa').limit(50000);
+  const { data: d2, error: e2 } = await sb.from('records').select('*').eq('sheet', 'royal').limit(50000);
   
+  if(e1 || e2) return '❌ Database Error: ' + (e1?e1.message:e2.message);
+
   let allData = [];
   if(d1) allData = allData.concat(d1.map(r => ({...r, _sheet: 'dankotuwa'})));
   if(d2) allData = allData.concat(d2.map(r => ({...r, _sheet: 'royal'})));
@@ -588,7 +597,7 @@ async function botQuery(qRaw){
   let filtered = allData;
   let desc = [];
 
-  // Smart Search for Numbers (Job, Inv, Veh)
+  // Smart Search (Look for numbers >= 3 digits)
   const searchTerms = qRaw.match(/[a-zA-Z0-9]+/g) || [];
   const numTerms = searchTerms.filter(t => t.length >= 3);
   
@@ -605,23 +614,13 @@ async function botQuery(qRaw){
       if (filtered.length < allData.length) desc.push('Search: ' + numTerms.join(' '));
   }
 
-  // Status & Seal filters
-  if (/\brtn\b|return|ආපසු/.test(q)) {
-      filtered = filtered.filter(r => /RTN/i.test(r.job_status || ''));
-      desc.push('Status: RTN');
-  } else if (/chkd|checked/.test(q)) {
-      filtered = filtered.filter(r => /CHKD/i.test(r.job_status || ''));
-      desc.push('Status: CHKD');
-  }
-  if (/seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q)) {
-      filtered = filtered.filter(r => /❌/.test(r.customer_seal || ''));
-      desc.push('Seal issues');
-  }
+  if (/\brtn\b|return|ආපසු/.test(q)) { filtered = filtered.filter(r => /RTN/i.test(r.job_status || '')); desc.push('Status: RTN'); }
+  else if (/chkd|checked/.test(q)) { filtered = filtered.filter(r => /CHKD/i.test(r.job_status || '')); desc.push('Status: CHKD'); }
+  
+  if (/seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q)) { filtered = filtered.filter(r => /❌/.test(r.customer_seal || '')); desc.push('Seal issues'); }
 
   const generalKeywords = /total|sum|amount|mudal|how many|count|keeyak|kiyak|ganana|list|show|pennanna|details|which|mona|jobs/;
-  if (desc.length === 0 && !generalKeywords.test(q)) {
-      return `🔍 "${qRaw}" සඳහා කිසිදු දත්ත සම්බන්ධතාවයක් හඳුනාගත නොහැකි විය.`;
-  }
+  if (desc.length === 0 && !generalKeywords.test(q)) return `🔍 "${qRaw}" සඳහා කිසිදු දත්ත සම්බන්ධතාවයක් හඳුනාගත නොහැකි විය.`;
 
   if (desc.length > 0 && filtered.length === 0) {
       return `❌ "${qRaw}" සඳහා කිසිදු විස්තරයක් හමු නොවිණි.\n\nℹ️ Database: Dankotuwa (${d1?d1.length:0} rows), Royal (${d2?d2.length:0} rows).`;
@@ -642,11 +641,18 @@ async function botQuery(qRaw){
   return summary + formatFullDetails(filtered);
 }
 
-// ---------------- BOT NEW ENTRY WIZARD ----------------
+// ================================================================
+// AI NEW ENTRY WIZARD
+// ================================================================
 function startNewEntry(){
   botState = { mode:'new_entry', sheet:null, data:{}, step:-1 };
-  return `📝 **New Job Entry**\n\nමේ job එක එකතු කරන්නේ කොහෙද?\nType හෝ කියන්න: **Dankotuwa** හෝ **Royal**`;
+  addMsg(`📝 **New Job Entry Started**\n\nමේ job එක එකතු කරන්නේ කොහෙද?\nType හෝ කියන්න: **Dankotuwa** හෝ **Royal**`, 'bot');
 }
+
+$('#btnAiNewJob').addEventListener('click', () => {
+  if(role !== 'admin') return;
+  startNewEntry();
+});
 
 function processNewEntry(q){
   const text = q.trim();
@@ -657,7 +663,6 @@ function processNewEntry(q){
     return '❌ New job entry cancelled.';
   }
 
-  // Step -1: Select Sheet
   if(botState.step === -1) {
     if(lower.includes('dank') || lower.includes('old')) { botState.sheet = 'dankotuwa'; }
     else if(lower.includes('roy') || lower.includes('frn')) { botState.sheet = 'royal'; }
@@ -667,7 +672,6 @@ function processNewEntry(q){
     return `✅ Sheet: ${SHEET_NAMES[botState.sheet]}\n\n1️⃣ **INV NO** එක type කරන්න හෝ කියන්න:`;
   }
 
-  // Steps 0 to N: Collect Data
   const fields = botState.fieldsToFill;
   if(botState.step < fields.length) {
     const field = fields[botState.step];
@@ -675,7 +679,7 @@ function processNewEntry(q){
     botState.data[dbKey] = text;
     
     if(field === 'CUSTOMER SEAL' && !text.includes('✅') && !text.includes('❌')) {
-       botState.data[dbKey] = '✅ ' + text; // auto format
+       botState.data[dbKey] = '✅ ' + text;
     }
     
     botState.step++;
@@ -687,13 +691,10 @@ function processNewEntry(q){
     }
   }
 
-  // Save Step
   if(botState.step === fields.length) {
     if(lower === 'save' || lower === 'yes' || lower === 'ok') {
       botState.data.sheet = botState.sheet;
       botState.data.entered_at = new Date().toISOString();
-      
-      // Async save (we use a promise wrapper inside handleChat)
       return { action: 'save_new_entry', data: botState.data };
     } else {
       return '❓ Save කරන්න ඕන නම් **"save"** කියන්න. අවලංගු කරන්න **"cancel"** කියන්න.';
@@ -730,13 +731,10 @@ async function handleChat(q){
     return res;
   }
 
-  if(/^(new job|add job|new entry|අලුත් ජොබ්)/.test(lower)){
+  if(lower.includes('new job') || lower.includes('add job') || lower.includes('new entry') || lower.includes('අලුත් ජොබ්')){
     if(role!=='admin') return '🔒 Admin only.';
-    return startNewEntry();
-  }
-
-  if(/^(update|set|change|fill|edit)/.test(lower) || /=| to | as /.test(lower)){
-    // existing update logic... (skipping for brevity, keeping core features)
+    startNewEntry();
+    return null; // Handled inside startNewEntry
   }
 
   return await botQuery(q);
@@ -759,6 +757,7 @@ async function sendChat(){
   
   try {
     let ans = await handleChat(q);
+    if(ans === null) { loading.remove(); return; } // For new entry start
     if(typeof ans !== 'string') ans = String(ans);
     loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
     speakText(ans);
@@ -773,8 +772,8 @@ $('#chatBox')?.addEventListener('keydown', e => { if(e.key==='Enter') sendChat()
 
 function updateBotChips(){
   const chips = role==='admin'
-    ? ['new job', 'Dankotuwa total amount?', 'RTN jobs', 'Seal issues']
-    : ['Dankotuwa total amount?', 'RTN jobs', 'PQ 0366'];
+    ? ['Dankotuwa total', '183985', 'RTN jobs', 'Seal issues', 'help']
+    : ['Dankotuwa total', '183985', 'RTN jobs', 'Seal issues', 'help'];
   $('#chips').innerHTML = chips.map(c => `<span class="chip">${esc(c)}</span>`).join('');
   $$('#chips .chip').forEach(ch => ch.addEventListener('click', () => {
     $('#chatBox').value = ch.textContent; sendChat();
