@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dankotuwa & Royal — Check Sheet</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{--bg:#f1f5f9;--line:#e2e8f0;--txt:#0f172a;--mut:#64748b;--pri:#1d4ed8;--ok:#15803d;--bad:#dc2626}
@@ -16,8 +15,6 @@ body{margin:0;font-family:'Segoe UI',system-ui,'Iskoola Pota',sans-serif;backgro
 .loginBox input{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:9px;margin-bottom:10px;font-size:14px;font-family:inherit}
 .loginBox button{width:100%;padding:11px;background:var(--pri);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
 .loginBox p{text-align:center;margin-top:14px;font-size:13px;color:var(--mut)}
-.loginBox a{color:var(--pri)}
-#loginMsg{margin-top:10px;font-size:13px;text-align:center;color:var(--bad)}
 header{background:linear-gradient(135deg,#1e3a8a,#0284c7);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 header b{font-size:16px}
 #userEmail{font-size:12px;opacity:.85;margin-left:8px}
@@ -65,8 +62,6 @@ button.del:hover{background:#fecaca}
 #chatInput{display:flex;gap:8px;margin-top:10px}
 #chatInput input{flex:1;padding:11px 14px;border-radius:10px}
 #chatInput button{padding:11px 20px;background:var(--pri);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600}
-#chatInput #micBtn{padding:0 15px;background:#0ea5e9;font-size:18px;display:flex;align-items:center;justify-content:center}
-#chatInput #ttsToggle{padding:0 12px;background:#64748b;font-size:16px;display:flex;align-items:center;justify-content:center}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chip{background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:5px 11px;border-radius:20px;font-size:12px;cursor:pointer}
 .chip:hover{background:#bae6fd}
@@ -78,28 +73,23 @@ button.del:hover{background:#fecaca}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 .modal-foot button{padding:9px 18px;border-radius:9px;border:1px solid var(--line);background:#fff;cursor:pointer;font-family:inherit;font-size:13px}
 .modal-foot button.primary{background:var(--pri);color:#fff;border-color:var(--pri)}
-.warn{background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:12px}
 </style>
 </head>
 <body>
+
+<!-- ⚠️ මෙතනට ඔයාගේ Google Web App URL එක දාන්න -->
+<script>
+const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbyOeE6Xxu8vqX0VVDm9WZmNIp7DFb8LFB3aqFr7Z8VC6agSoIBaXk1j5lVd2cpeUrAm/exec'; 
+</script>
 
 <div id="loading">⏳ Loading...</div>
 
 <div id="loginScreen" style="display:none">
   <div class="loginBox">
     <h2>📦 Check Sheet Login</h2>
-    <div id="loginForm">
-      <input type="email" id="loginEmail" placeholder="Email">
-      <input type="password" id="loginPassword" placeholder="Password">
-      <button onclick="doLogin()">Login</button>
-      <p>No account? <a href="#" onclick="showSignup();return false">Sign Up</a></p>
-    </div>
-    <div id="signupForm" style="display:none">
-      <input type="email" id="signupEmail" placeholder="Email">
-      <input type="password" id="signupPassword" placeholder="Password (min 6)">
-      <button onclick="doSignup()">Sign Up</button>
-      <p>Have account? <a href="#" onclick="showLogin();return false">Login</a></p>
-    </div>
+    <input type="password" id="loginPassword" placeholder="Enter Password (admin123 / viewer)">
+    <button onclick="doLogin()">Login</button>
+    <p style="font-size:11px;color:#94a3b8">Admin: admin123<br>Viewer: viewer</p>
     <div id="loginMsg"></div>
   </div>
 </div>
@@ -112,7 +102,6 @@ button.del:hover{background:#fecaca}
       <span id="userRole" class="roleBadge"></span>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <label id="importWrap" class="btn">📁 Import Excel<input type="file" id="fileXlsx" accept=".xlsx,.xls" hidden></label>
       <button id="btnAdd" class="btn">➕ Manual Add</button>
       <button id="btnExport" class="btn">⬇ Export</button>
       <button onclick="doLogout()" class="btn ghost">Logout</button>
@@ -163,9 +152,7 @@ button.del:hover{background:#fecaca}
         <div id="chatWrap">
           <div id="chatLog"></div>
           <div id="chatInput">
-            <button id="micBtn" title="Voice Search">🎤</button>
             <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... (උදා: 183985)">
-            <button id="ttsToggle" title="Toggle Voice">🔇</button>
             <button id="chatSend">Ask ➤</button>
           </div>
           <div class="chips" id="chips"></div>
@@ -176,17 +163,6 @@ button.del:hover{background:#fecaca}
 </div>
 
 <script>
-// ================================================================
-// ⚠️ REPLACE THESE WITH YOUR SUPABASE VALUES
-// ================================================================
-const SUPABASE_URL = 'https://fjdrcrokhujomcwjwrze.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqZHJjcm9raHVqb21jd2p3cnplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxMDI0MzMsImV4cCI6MjEwODY3ODQzM30.PwlmHmvA27vCmE9ywHWuMgcdNeeCGLbeSSCiX_vmDtw';
-
-let sb;
-try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
-catch(e) { document.getElementById('loading').innerHTML = '⚠️ Supabase config error: ' + e.message; }
-
-// ================================================================
 const FIELDS = ["JOB NO","JB DATE","VEH NO","Driver","ROUTE","CUSTOMER","CUS CODE","INV NO",
 "ALL Pg No","AMOUNT","CUSTOMER SEAL","CHK DATE","JOB TYPE","REMARKS","JOB STATUS",
 "Handover To","ENTERED BY","ENTERED AT"];
@@ -203,79 +179,86 @@ const norm = s => String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
 const num = v => { const n = parseFloat(String(v==null?"":v).replace(/[^0-9.\-]/g,"")); return isNaN(n)?0:n; };
 const money = n => n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 
-let user = null, role = 'viewer', records = [], cur = 'dankotuwa', page = 1;
+let user = null, role = 'viewer', allData = [], cur = 'dankotuwa', page = 1;
 const PER = 50;
 let botState = { mode:'query', sheet:null, data:{}, step:0, fieldsToFill:['INV NO','JOB NO','VEH NO','AMOUNT','CUSTOMER','CUSTOMER SEAL','CHK DATE','REMARKS'] };
 
-// ================================================================
-// AUTH
-// ================================================================
-async function initAuth() {
+// API CONNECTION
+async function fetchData() {
+  $('#loading').style.display = 'block';
+  $('#loading').innerText = '⏳ Syncing with Google Sheets...';
   try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) await onLogin(session.user);
-    else showLoginScreen();
-    sb.auth.onAuthStateChange(async (_, s) => {
-      if (s) await onLogin(s.user);
-      else { user=null; role='viewer'; showLoginScreen(); }
+    const res = await fetch(GOOGLE_SHEET_API_URL);
+    allData = await res.json();
+    allData = allData.map(r => {
+       r.id = String(r.id || '');
+       r.amount = String(r.amount || '');
+       return r;
     });
+    $('#loading').style.display = 'none';
+    renderAll();
   } catch(e) {
-    $('#loading').innerHTML = '<div style="color:#dc2626;padding:40px;text-align:center">⚠️ ' + esc(e.message) + '<br><br>Supabase URL/key check කරන්න.</div>';
+    $('#loading').innerText = '❌ Error: ' + e.message;
   }
 }
 
-async function onLogin(u) {
-  user = u;
-  const { data } = await sb.from('user_roles').select('role').eq('user_id', u.id).maybeSingle();
-  role = data?.role || 'viewer';
-  $('#userEmail').textContent = u.email;
+async function syncAction(action, payload) {
+  const res = await fetch(GOOGLE_SHEET_API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: action, data: payload })
+  });
+  return await res.json();
+}
+
+// ================================================================
+// AUTH (Simple Local)
+// ================================================================
+function doLogin() {
+  const p = $('#loginPassword').value;
+  if (p === 'Cs@6252') {
+    role = 'admin'; user = { email: 'Admin' };
+  } else if (p === 'viewer') {
+    role = 'viewer'; user = { email: 'Viewer' };
+  } else {
+    $('#loginMsg').textContent = '❌ Incorrect password!';
+    return;
+  }
+  $('#userEmail').textContent = user.email;
   $('#userRole').textContent = role.toUpperCase();
   $('#userRole').className = 'roleBadge role-' + role;
+  
+  $('#loginScreen').style.display = 'none';
+  $('#appScreen').style.display = 'block';
   applyRoleUI();
-  await loadRecords();
-  showAppScreen();
+  fetchData();
+}
+
+function doLogout() {
+  user = null; role = 'viewer'; allData = [];
+  $('#appScreen').style.display = 'none';
+  $('#loginScreen').style.display = 'block';
+  $('#loginPassword').value = '';
+  $('#loginMsg').textContent = '';
 }
 
 function applyRoleUI() {
   const admin = role === 'admin';
-  $('#importWrap').style.display = admin ? 'inline-flex' : 'none';
   $('#btnAdd').style.display = admin ? 'inline-flex' : 'none';
   $('#btnAiNewJob').style.display = admin ? 'block' : 'none';
 }
-function showLoginScreen(){ $('#loading').style.display='none'; $('#loginScreen').style.display='block'; $('#appScreen').style.display='none'; }
-function showAppScreen(){ $('#loading').style.display='none'; $('#loginScreen').style.display='none'; $('#appScreen').style.display='block'; renderAll(); }
-function showSignup(){ $('#loginForm').style.display='none'; $('#signupForm').style.display='block'; }
-function showLogin(){ $('#signupForm').style.display='none'; $('#loginForm').style.display='block'; }
-
-async function doLogin() {
-  $('#loginMsg').textContent = '';
-  const { error } = await sb.auth.signInWithPassword({ email: $('#loginEmail').value.trim(), password: $('#loginPassword').value });
-  if (error) $('#loginMsg').textContent = error.message;
-}
-async function doSignup() {
-  $('#loginMsg').textContent = '';
-  const { error } = await sb.auth.signUp({ email: $('#signupEmail').value.trim(), password: $('#signupPassword').value });
-  if (error) $('#loginMsg').textContent = error.message;
-  else $('#loginMsg').style.color = '#15803d', $('#loginMsg').textContent = '✅ Account created. Please login.';
-}
-async function doLogout() { await sb.auth.signOut(); }
 
 // ================================================================
-// DATA & GRID
+// GRID RENDER
 // ================================================================
-async function loadRecords() {
-  const { data, error } = await sb.from('records').select('*').eq('sheet', cur).order('id', {ascending:true});
-  if (error) { alert('Load error: ' + error.message); return; }
-  records = data || [];
-}
-async function switchSheet(k){ cur=k; page=1; await loadRecords(); }
-
 function renderGrid(){
   const q = ($('#search')?.value||'').toLowerCase();
   const st = ($('#statusFilter')?.value||'').toUpperCase();
-  let rows = records.slice();
+  
+  let rows = allData.filter(r => r.sheet === cur);
+  
   if(q) rows = rows.filter(r => FIELDS.some(f => String(r[FIELD_KEYS[f]]||'').toLowerCase().includes(q)));
   if(st) rows = rows.filter(r => String(r.job_status||'').toUpperCase().includes(st));
+  
   const total = rows.length;
   const pages = Math.max(1, Math.ceil(total/PER));
   if(page>pages) page = pages;
@@ -305,23 +288,30 @@ function renderGrid(){
 
 document.addEventListener('focusout', async e => {
   const td = e.target.closest('td[contenteditable="true"]'); if(!td) return;
-  const id = +td.dataset.id, key = td.dataset.k, nv = td.innerText.trim();
-  const rec = records.find(r => r.id === id);
+  const id = td.dataset.id, key = td.dataset.k, nv = td.innerText.trim();
+  const rec = allData.find(r => r.id === id);
   if(!rec || String(rec[key]||'') === nv) return;
-  const { error } = await sb.from('records').update({[key]: nv}).eq('id', id);
-  if(error){ alert(error.message); td.innerText = rec[key]||''; }
-  else rec[key] = nv;
+  
+  td.innerText = 'Saving...';
+  await syncAction('update', { id: id, key: key, value: nv });
+  rec[key] = nv;
+  td.innerText = nv;
+  td.className = '';
 });
 
 document.addEventListener('click', async e => {
   const b = e.target.closest('.del'); if(!b) return;
   if(!confirm('Delete this row?')) return;
-  const id = +b.dataset.id;
-  const { error } = await sb.from('records').delete().eq('id', id);
-  if(error){ alert(error.message); return; }
-  records = records.filter(r => r.id !== id);
+  const id = b.dataset.id;
+  await syncAction('delete', { id: id });
+  allData = allData.filter(r => r.id !== id);
   renderAll();
 });
+
+$('#search')?.addEventListener('input', ()=>{page=1;renderGrid()});
+$('#statusFilter')?.addEventListener('change', ()=>{page=1;renderGrid()});
+$('#prevPage')?.addEventListener('click', ()=>{if(page>1){page--;renderGrid()}});
+$('#nextPage')?.addEventListener('click', ()=>{page++;renderGrid()});
 
 // ================================================================
 // MANUAL NEW ENTRY
@@ -348,122 +338,12 @@ $('#btnAdd')?.addEventListener('click', () => {
     modal.querySelectorAll('input[data-k]').forEach(i => o[i.dataset.k] = i.value.trim());
     if(!Object.values(o).some(v => v && v !== targetSheet)){ alert('Fill at least one field'); return; }
     if(!o.entered_at) o.entered_at = new Date().toISOString();
-    const { error } = await sb.from('records').insert(o);
-    if(error){ alert(error.message); return; }
+    
+    modal.querySelector('.save').innerText = 'Saving...';
+    await syncAction('add', o);
     modal.remove();
-    alert('✅ Job saved successfully!');
-    if(targetSheet !== cur) {
-       await switchSheet(targetSheet);
-       $$('nav button').forEach(b => b.classList.remove('active'));
-       $(`nav button[data-tab="${targetSheet}"]`).classList.add('active');
-       $('#tab-grid').classList.add('active');
-       $('#sheetLabel').textContent = SHEET_NAMES[cur];
-    }
-    await loadRecords();
-    renderAll();
+    await fetchData();
   };
-});
-
-// ================================================================
-// NAV & IMPORT / EXPORT
-// ================================================================
-$$('nav button').forEach(btn => btn.addEventListener('click', async () => {
-  const t = btn.dataset.tab;
-  $$('nav button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  $$('.tab').forEach(s => s.classList.remove('active'));
-  if(t==='dankotuwa' || t==='royal'){
-    await switchSheet(t);
-    $('#tab-grid').classList.add('active');
-    $('#sheetLabel').textContent = SHEET_NAMES[cur];
-    renderGrid();
-  } else {
-    $('#tab-'+t).classList.add('active');
-    if(t==='dash') renderDash();
-    if(t==='bot'){
-      updateBotChips();
-      if(!$('#chatLog').children.length) addMsg('👋 ආයුබෝවන්! මම Check Sheet Assistant.\n\n' +
-        '🔹 **Search:** Job No එකක් හෝ Inv No එකක් type කරන්න (උදා: 183985)\n' +
-        (role==='admin' ? '🔹 **New Job:** උඩ තියෙන "➕ Start New Job" බටන් එක ඔබන්න.\n' : '') +
-        '\n"help" type කරලා බලන්න 🤖', 'bot');
-    }
-  }
-}));
-
-$('#fileXlsx')?.addEventListener('change', e => {
-  if(role!=='admin') return;
-  const file = e.target.files[0]; if(!file) return;
-  const rd = new FileReader();
-  rd.onload = async ev => {
-    try {
-      const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
-      const results = [];
-      
-      for(const sn of wb.SheetNames){
-        let key = null;
-        if(/royal/i.test(sn)) key = 'royal';
-        else if(/dankotuwa|danktw|dnktw/i.test(sn)) key = 'dankotuwa';
-        if(!key) continue;
-        
-        const rows = parseSheet(wb.Sheets[sn]);
-        if(rows.length === 0) { results.push(`${SHEET_NAMES[key]}: 0 rows (Data not found)`); continue; }
-        
-        await sb.from('records').delete().eq('sheet', key);
-        let successCount = 0;
-        
-        // Batch insert with fallback to individual rows to prevent total failure
-        for(let i=0; i<rows.length; i+=50){
-          const batch = rows.slice(i, i+50).map(r => ({sheet:key, ...r}));
-          const { error } = await sb.from('records').insert(batch);
-          
-          if(error) {
-             // If batch fails, try inserting one by one
-             for(const row of batch) {
-                 const { error: e2 } = await sb.from('records').insert(row);
-                 if(!e2) successCount++;
-             }
-          } else {
-             successCount += batch.length;
-          }
-        }
-        results.push(`${SHEET_NAMES[key]}: ${successCount} rows imported ✅`);
-      }
-      await loadRecords();
-      renderAll();
-      alert('Import Results:\n\n' + results.join('\n'));
-    } catch(err){ alert('❌ Import Error: ' + err.message); }
-  };
-  rd.readAsArrayBuffer(file);
-  e.target.value = '';
-});
-
-function parseSheet(ws){
-  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false, blankrows:false, dateNF:'yyyy-mm-dd'});
-  let hi = -1;
-  for(let i=0; i<Math.min(aoa.length,12); i++)
-    if((aoa[i]||[]).some(c => String(c).trim().toUpperCase() === 'JOB NO')){ hi = i; break; }
-  if(hi<0) hi = 0;
-  const out = [];
-  for(let i=hi+1; i<aoa.length; i++){
-    const r = aoa[i] || [];
-    const o = {};
-    FIELDS.forEach((f,j)=>{ o[FIELD_KEYS[f]] = r[j]==null?'':String(r[j]).trim(); });
-    const jn = String(o.job_no||'').toUpperCase();
-    if(jn==='JOB NO' || jn==='CUS & CODE' || jn==='CUS AND CODE') continue;
-    if(!o.inv_no && !o.amount && !o.veh_no && !o.job_no) continue;
-    out.push(o);
-  }
-  return out;
-}
-
-$('#btnExport')?.addEventListener('click', async () => {
-  const wb = XLSX.utils.book_new();
-  for(const k of ['dankotuwa','royal']){
-    const { data } = await sb.from('records').select('*').eq('sheet', k);
-    const aoa = [FIELDS, ...(data||[]).map(r => FIELDS.map(f => r[FIELD_KEYS[f]]||''))];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), SHEET_NAMES[k]);
-  }
-  XLSX.writeFile(wb, 'Check_Sheet_' + new Date().toISOString().slice(0,10) + '.xlsx');
 });
 
 // ================================================================
@@ -483,17 +363,11 @@ function calcStats(arr){
   return s;
 }
 
-async function renderDash(){
-  const [a, b] = await Promise.all([
-    sb.from('records').select('*').eq('sheet','dankotuwa'),
-    sb.from('records').select('*').eq('sheet','royal')
-  ]);
-  const dData = a.data||[], rData = b.data||[];
+function renderDash(){
+  const dData = allData.filter(r => r.sheet === 'dankotuwa');
+  const rData = allData.filter(r => r.sheet === 'royal');
   const d = calcStats(dData), r = calcStats(rData);
-  if(!d.n && !r.n){
-    $('#dashBody').innerHTML = `<div class="warn">තවම දත්ත නැහැ${role==='admin'?' — Import Excel කරන්න':''}.</div>`;
-    return;
-  }
+  
   const card = (l,v,c='') => `<div class="stat ${c}"><div class="lbl">${l}</div><div class="val">${v}</div></div>`;
   const topVeh = arr => {
     const e = Object.entries(calcStats(arr).veh).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -519,35 +393,19 @@ async function renderDash(){
 }
 
 // ================================================================
-// AI BOT & SEARCH
+// AI BOT & NEW ENTRY WIZARD
 // ================================================================
 function printTable(rows) {
   let html = `<html><head><title>Print Report</title>
-  <style>
-    body { font-family: 'Segoe UI', sans-serif; font-size: 12px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th, td { border: 1px solid #000; padding: 6px; text-align: left; }
-    th { background: #ddd; }
-  </style></head><body>
-  <h2>Check Sheet Report</h2>
-  <p>Date: ${new Date().toLocaleDateString()}</p>
-  <table><tr>
-    <th>Sheet</th><th>Job No</th><th>Job Date</th><th>Veh No</th><th>Customer</th><th>Inv No</th>
-    <th>Chk Date</th><th>Remarks</th><th>Job Status</th><th>Handover To</th>
-  </tr>`;
+  <style>body{font-family:sans-serif;font-size:12px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #000;padding:6px;text-align:left}th{background:#ddd}</style>
+  </head><body><h2>Check Sheet Report</h2><p>Date: ${new Date().toLocaleDateString()}</p>
+  <table><tr><th>Sheet</th><th>Job No</th><th>Job Date</th><th>Veh No</th><th>Customer</th><th>Inv No</th><th>Chk Date</th><th>Remarks</th><th>Job Status</th><th>Handover To</th></tr>`;
   rows.forEach(r => {
-    html += `<tr>
-      <td>${r._sheet ? SHEET_NAMES[r._sheet] : ''}</td>
-      <td>${esc(r.job_no||'')}</td><td>${esc(r.jb_date||'')}</td><td>${esc(r.veh_no||'')}</td>
-      <td>${esc(r.customer||'')}</td><td>${esc(r.inv_no||'')}</td><td>${esc(r.chk_date||'')}</td>
-      <td>${esc(r.remarks||'')}</td><td>${esc(r.job_status||'')}</td><td>${esc(r.handover_to||'')}</td>
-    </tr>`;
+    html += `<tr><td>${SHEET_NAMES[r.sheet]}</td><td>${esc(r.job_no||'')}</td><td>${esc(r.jb_date||'')}</td><td>${esc(r.veh_no||'')}</td><td>${esc(r.customer||'')}</td><td>${esc(r.inv_no||'')}</td><td>${esc(r.chk_date||'')}</td><td>${esc(r.remarks||'')}</td><td>${esc(r.job_status||'')}</td><td>${esc(r.handover_to||'')}</td></tr>`;
   });
   html += `</table></body></html>`;
   const win = window.open('', '', 'width=1000,height=800');
-  win.document.write(html);
-  win.document.close();
-  win.focus();
+  win.document.write(html); win.document.close(); win.focus();
   setTimeout(() => { win.print(); win.close(); }, 500);
 }
 
@@ -555,92 +413,45 @@ function formatFullDetails(rows) {
   if (rows.length === 0) return "";
   if (rows.length === 1) {
     const r = rows[0];
-    const sheetName = r._sheet ? SHEET_NAMES[r._sheet] : '';
-    return `📄 **Details for ${sheetName} INV: ${r.inv_no}**\n\n` +
-           `• **Job No:** ${r.job_no || '-'}\n` +
-           `• **Job Date:** ${r.jb_date || '-'}\n` +
-           `• **Veh No:** ${r.veh_no || '-'}\n` +
-           `• **Customer:** ${r.customer || '-'}\n` +
-           `• **Inv No:** ${r.inv_no || '-'}\n` +
-           `• **Chk Date:** ${r.chk_date || '-'}\n` +
-           `• **Remarks:** ${r.remarks || '-'}\n` +
-           `• **Job Status:** ${r.job_status || '-'}\n` +
-           `• **Handover To:** ${r.handover_to || '-'}`;
+    return `📄 **Details for ${SHEET_NAMES[r.sheet]} INV: ${r.inv_no}**\n\n` +
+           `• **Job No:** ${r.job_no || '-'}\n• **Job Date:** ${r.jb_date || '-'}\n• **Veh No:** ${r.veh_no || '-'}\n` +
+           `• **Customer:** ${r.customer || '-'}\n• **Inv No:** ${r.inv_no || '-'}\n• **Chk Date:** ${r.chk_date || '-'}\n` +
+           `• **Remarks:** ${r.remarks || '-'}\n• **Job Status:** ${r.job_status || '-'}\n• **Handover To:** ${r.handover_to || '-'}`;
   }
   let tableHtml = `<div style="overflow-x:auto"><table style="width:100%;font-size:12px;margin-top:10px;border-collapse:collapse;border:1px solid #e2e8f0">
-    <thead><tr style="background:#f1f5f9">
-      <th style="padding:5px;border:1px solid #e2e8f0">Sheet</th>
-      <th style="padding:5px;border:1px solid #e2e8f0">Job No</th><th style="padding:5px;border:1px solid #e2e8f0">Date</th><th style="padding:5px;border:1px solid #e2e8f0">Veh</th><th style="padding:5px;border:1px solid #e2e8f0">Customer</th><th style="padding:5px;border:1px solid #e2e8f0">Inv No</th><th style="padding:5px;border:1px solid #e2e8f0">Status</th>
-    </tr></thead><tbody>`;
+    <thead><tr style="background:#f1f5f9"><th style="padding:5px;border:1px solid #e2e8f0">Sheet</th><th style="padding:5px;border:1px solid #e2e8f0">Job No</th><th style="padding:5px;border:1px solid #e2e8f0">Date</th><th style="padding:5px;border:1px solid #e2e8f0">Veh</th><th style="padding:5px;border:1px solid #e2e8f0">Customer</th><th style="padding:5px;border:1px solid #e2e8f0">Inv No</th><th style="padding:5px;border:1px solid #e2e8f0">Status</th></tr></thead><tbody>`;
   rows.forEach(r => {
-    tableHtml += `<tr>
-      <td style="padding:5px;border:1px solid #e2e8f0">${r._sheet ? SHEET_NAMES[r._sheet] : ''}</td>
-      <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.job_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.jb_date||'-')}</td>
-      <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.veh_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.customer||'-')}</td>
-      <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.inv_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.job_status||'-')}</td>
-    </tr>`;
+    tableHtml += `<tr><td style="padding:5px;border:1px solid #e2e8f0">${SHEET_NAMES[r.sheet]}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.job_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.jb_date||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.veh_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.customer||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.inv_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.job_status||'-')}</td></tr>`;
   });
   tableHtml += `</tbody></table></div>`;
   const printBtnId = 'print_btn_' + Date.now();
-  setTimeout(() => {
-    const btn = document.getElementById(printBtnId);
-    if(btn) btn.onclick = () => printTable(rows);
-  }, 100);
-  return `📋 Found **${rows.length}** records.<br>` +
-         `<button id="${printBtnId}" style="margin-top:8px;padding:6px 12px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600">🖨️ Print Results</button>` +
-         tableHtml;
+  setTimeout(() => { const btn = document.getElementById(printBtnId); if(btn) btn.onclick = () => printTable(rows); }, 100);
+  return `📋 Found **${rows.length}** records.<br><button id="${printBtnId}" style="margin-top:8px;padding:6px 12px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600">🖨️ Print Results</button>` + tableHtml;
 }
 
 async function botQuery(qRaw){
   const q = qRaw.toLowerCase().trim();
   if(!q) return 'ප්‍රශ්නයක් අහන්න 🙂';
-  if(/^(help|උදව්|mokakda|what can)/.test(q)) return HELP_TEXT;
-
-  const { data: d1 } = await sb.from('records').select('*').eq('sheet', 'dankotuwa').limit(50000);
-  const { data: d2 } = await sb.from('records').select('*').eq('sheet', 'royal').limit(50000);
-  
-  let allData = [];
-  if(d1) allData = allData.concat(d1.map(r => ({...r, _sheet: 'dankotuwa'})));
-  if(d2) allData = allData.concat(d2.map(r => ({...r, _sheet: 'royal'})));
-
-  if(allData.length === 0) return '⚠️ Database එකේ කිසිදු දත්තයක් නැහැ. කරුණාකර Excel file එක Import කරන්න.';
+  if(/^(help|උදව්)/.test(q)) return `🤖 Search: "183985", "RTN jobs", "Seal issues"`;
 
   let filtered = allData;
   let desc = [];
 
-  // Extremely powerful search: look for the number anywhere in the row
-  const searchTerms = qRaw.match(/[a-zA-Z0-9]+/g) || [];
-  const numTerms = searchTerms.filter(t => t.length >= 3);
-  
+  const numTerms = (qRaw.match(/[a-zA-Z0-9]+/g) || []).filter(t => t.length >= 3);
   if (numTerms.length > 0) {
-      filtered = allData.filter(r => {
-          // stringify the whole row and remove spaces
+      filtered = filtered.filter(r => {
           const rowStr = norm(JSON.stringify(r));
           return numTerms.some(term => rowStr.includes(norm(term)));
       });
       if (filtered.length < allData.length) desc.push('Search: ' + numTerms.join(' '));
   }
 
-  if (/\brtn\b|return|ආපසු/.test(q)) { filtered = filtered.filter(r => /RTN/i.test(r.job_status || '')); desc.push('Status: RTN'); }
+  if (/\brtn\b|return/.test(q)) { filtered = filtered.filter(r => /RTN/i.test(r.job_status || '')); desc.push('Status: RTN'); }
   else if (/chkd|checked/.test(q)) { filtered = filtered.filter(r => /CHKD/i.test(r.job_status || '')); desc.push('Status: CHKD'); }
-  
   if (/seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q)) { filtered = filtered.filter(r => /❌/.test(r.customer_seal || '')); desc.push('Seal issues'); }
 
-  const generalKeywords = /total|sum|amount|mudal|how many|count|keeyak|kiyak|ganana|list|show|pennanna|details|which|mona|jobs/;
-  if (desc.length === 0 && !generalKeywords.test(q)) return `🔍 "${qRaw}" සඳහා කිසිදු දත්ත සම්බන්ධතාවයක් හඳුනාගත නොහැකි විය.`;
-
   if (desc.length > 0 && filtered.length === 0) {
-      return `❌ "${qRaw}" සඳහා කිසිදු විස්තරයක් හමු නොවිණි.\n\nℹ️ Database: Dankotuwa (${d1?d1.length:0} rows), Royal (${d2?d2.length:0} rows).`;
-  }
-
-  const wantSum = /total|sum|amount|mudal/.test(q);
-  const wantList = /list|show|pennanna|details|which|mona/.test(q);
-
-  if (wantSum) {
-      const t = filtered.reduce((a, r) => a + num(r.amount), 0);
-      let out = `📊 **Results** ${desc.length ? '`('+desc.join(', ')+')`' : ''}\n• Records: **${filtered.length}**\n• Amount: **Rs ${money(t)}**`;
-      if (wantList && filtered.length <= 20) out += '\n\n' + formatFullDetails(filtered);
-      return out;
+      return `❌ "${qRaw}" සඳහා කිසිදු විස්තරයක් හමු නොවිණි.\n\nℹ️ Database: Dankotuwa (${allData.filter(r=>r.sheet==='dankotuwa').length} rows), Royal (${allData.filter(r=>r.sheet==='royal').length} rows).`;
   }
 
   const t = filtered.reduce((a, r) => a + num(r.amount), 0);
@@ -694,7 +505,7 @@ function processNewEntry(q){
     if(botState.step < fields.length) {
       return `✅ ${field}: **${text}**\n\n${botState.step + 1}️⃣ **${fields[botState.step]}** type කරන්න හෝ කියන්න:`;
     } else {
-      return `✅ ${field}: **${text}**\n\n📋 **සියලුම විස්තර ලැබුණා!**\nType **"save"** to save to database or **"cancel"**:`;
+      return `✅ ${field}: **${text}**\n\n📋 **සියලුම විස්තර ලැබුණා!**\nType **"save"** to save or **"cancel"**:`;
     }
   }
 
@@ -710,40 +521,17 @@ function processNewEntry(q){
   return '';
 }
 
-const HELP_TEXT = `🤖 Queries:
-• "Dankotuwa total amount?"
-• "RTN jobs keeyak?"
-• "PQ 0366 jobs pennanna"
-• "183985" (Job No)
-• "Seal issues"
-
-New Job (admin only):
-• "new job" - අලුත් ජොබ් එකක් එකතු කරන්න (Voice/Typing)
-
-Guided fill (admin):
-• "fill missing" - පරණ ඒවායේ හිස් තැන් පිරවීම
-• "skip" / "cancel"`;
-
 async function handleChat(q){
-  const lower = q.toLowerCase();
-  
   if(botState.mode === 'new_entry'){
     const res = processNewEntry(q);
     if(typeof res === 'object' && res.action === 'save_new_entry') {
-      const { error } = await sb.from('records').insert(res.data);
-      if(error) { botState.mode='query'; return '❌ Error saving: ' + error.message; }
+      await syncAction('add', res.data);
       botState.mode = 'query';
+      await fetchData();
       return `🎉 **Job Successfully Saved!**\nSheet: ${SHEET_NAMES[res.data.sheet]}\nINV: ${res.data.inv_no}`;
     }
     return res;
   }
-
-  if(lower.includes('new job') || lower.includes('add job') || lower.includes('new entry') || lower.includes('අලුත් ජොබ්')){
-    if(role!=='admin') return '🔒 Admin only.';
-    startNewEntry();
-    return null;
-  }
-
   return await botQuery(q);
 }
 
@@ -765,77 +553,46 @@ async function sendChat(){
   try {
     let ans = await handleChat(q);
     if(ans === null) { loading.remove(); return; }
-    if(typeof ans !== 'string') ans = String(ans);
-    loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-    speakText(ans);
-  } catch(e) { 
-    loading.innerHTML = '❌ Error: ' + esc(e.message);
-  }
+    loading.innerHTML = String(ans).replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  } catch(e) { loading.innerHTML = '❌ Error: ' + esc(e.message); }
   $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
 }
 
 $('#chatSend')?.addEventListener('click', sendChat);
 $('#chatBox')?.addEventListener('keydown', e => { if(e.key==='Enter') sendChat(); });
 
-function updateBotChips(){
-  const chips = ['Dankotuwa total', '183985', 'RTN jobs', 'Seal issues', 'help'];
-  $('#chips').innerHTML = chips.map(c => `<span class="chip">${esc(c)}</span>`).join('');
-  $$('#chips .chip').forEach(ch => ch.addEventListener('click', () => {
-    $('#chatBox').value = ch.textContent; sendChat();
-  }));
-}
-
-// -------- Voice (Mic & TTS) --------
-let ttsEnabled = false;
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-$('#ttsToggle')?.addEventListener('click', () => {
-  ttsEnabled = !ttsEnabled;
-  $('#ttsToggle').innerText = ttsEnabled ? '🔊' : '🔇';
-  $('#ttsToggle').style.background = ttsEnabled ? '#15803d' : '#64748b';
-  if(ttsEnabled) speakText("Voice output enabled");
-});
-
-function speakText(text) {
-  if(!ttsEnabled) return;
-  window.speechSynthesis.cancel();
-  let clean = text.replace(/[*#•]/g, '').replace(/<[^>]*>/g, '').replace(/Rs/g, 'Rupees ');
-  const utt = new SpeechSynthesisUtterance(clean);
-  utt.lang = 'en-US';
-  window.speechSynthesis.speak(utt);
-}
-
-if(SpeechRecognition) {
-  const recog = new SpeechRecognition();
-  recog.lang = 'en-US';
-  recog.interimResults = false;
-  
-  $('#micBtn')?.addEventListener('click', () => {
-    $('#micBtn').style.background = '#dc2626';
-    $('#chatBox').placeholder = "🎤 අහගෙන ඉන්නවා...";
-    recog.start();
-  });
-
-  recog.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    $('#chatBox').value = text;
-    $('#micBtn').style.background = '#0ea5e9';
-    $('#chatBox').placeholder = "ප්‍රශ්නයක් අහන්න... (උදා: 183985)";
-    sendChat();
-  };
-  
-  recog.onspeechend = () => recog.stop();
-  recog.onerror = () => { $('#micBtn').style.background = '#0ea5e9'; };
-} else {
-  $('#micBtn') && ($('#micBtn').style.display = 'none');
-}
-
 function renderAll(){
   if($('#tab-dash').classList.contains('active')) renderDash();
   if($('#tab-grid').classList.contains('active')) renderGrid();
 }
 
-initAuth();
+$$('nav button').forEach(btn => btn.addEventListener('click', () => {
+  const t = btn.dataset.tab;
+  $$('nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  $$('.tab').forEach(s => s.classList.remove('active'));
+  if(t==='dankotuwa' || t==='royal'){
+    cur = t; page = 1;
+    $('#tab-grid').classList.add('active');
+    $('#sheetLabel').textContent = SHEET_NAMES[cur];
+    renderGrid();
+  } else {
+    $('#tab-'+t).classList.add('active');
+    if(t==='dash') renderDash();
+    if(t==='bot'){
+       const chips = ['Dankotuwa total', '183985', 'RTN jobs', 'Seal issues', 'help'];
+       $('#chips').innerHTML = chips.map(c => `<span class="chip">${esc(c)}</span>`).join('');
+       $$('#chips .chip').forEach(ch => ch.addEventListener('click', () => {
+         $('#chatBox').value = ch.textContent; sendChat();
+       }));
+       if(!$('#chatLog').children.length) addMsg('👋 ආයුබෝවන්! මම Check Sheet Assistant.\n\n🔹 **Search:** Job No / Inv No (උදා: 183985)\n🔹 **New Job:** උඩ තියෙන "➕ Start New Job" බටන් එක ඔබන්න.\n\n"help" type කරලා බලන්න 🤖', 'bot');
+    }
+  }
+}));
+
+// Show Login
+$('#loading').style.display = 'none';
+$('#loginScreen').style.display = 'block';
 </script>
 </body>
 </html>
