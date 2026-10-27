@@ -62,6 +62,8 @@ button.del:hover{background:#fecaca}
 #chatInput{display:flex;gap:8px;margin-top:10px}
 #chatInput input{flex:1;padding:11px 14px;border-radius:10px}
 #chatInput button{padding:11px 20px;background:var(--pri);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600}
+#chatInput #micBtn{padding:0 15px;background:#0ea5e9;font-size:18px;display:flex;align-items:center;justify-content:center}
+#chatInput #ttsToggle{padding:0 12px;background:#64748b;font-size:16px;display:flex;align-items:center;justify-content:center}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chip{background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:5px 11px;border-radius:20px;font-size:12px;cursor:pointer}
 .chip:hover{background:#bae6fd}
@@ -79,12 +81,12 @@ button.del:hover{background:#fecaca}
 
 <!-- ⚠️ මෙතනට ඔයාගේ Google Web App URL එක දාන්න -->
 <script>
-const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxus3IeFKsZpMmkxqeLaP8H5_Bk2f8C7NXZQlvrdPaiKN3dw_xhBPMYFaXy7zr1F7ULFQ/exec'; 
+const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbwioQOVtzb_tVGcVoZX05uyhjTEx_d5hTIAwTxO-c-zSbtTe8eAMGthU5wDvNs4C6PyUw/exec'; 
 </script>
 
-<div id="loading">⏳ Loading...</div>
+<div id="loading" style="display:none">⏳ Loading...</div>
 
-<div id="loginScreen" style="display:none">
+<div id="loginScreen" style="display:block">
   <div class="loginBox">
     <h2>📦 Check Sheet Login</h2>
     <input type="password" id="loginPassword" placeholder="Enter Password (admin123 / viewer)">
@@ -102,6 +104,7 @@ const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxus3IeFKs
       <span id="userRole" class="roleBadge"></span>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="fetchData()" class="btn" style="background:#0ea5e9;border:none">🔄 Refresh Data</button>
       <button id="btnAdd" class="btn">➕ Manual Add</button>
       <button id="btnExport" class="btn">⬇ Export</button>
       <button onclick="doLogout()" class="btn ghost">Logout</button>
@@ -152,7 +155,9 @@ const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxus3IeFKs
         <div id="chatWrap">
           <div id="chatLog"></div>
           <div id="chatInput">
+            <button id="micBtn" title="Voice Search">🎤</button>
             <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... (උදා: 183985)">
+            <button id="ttsToggle" title="Toggle Voice">🔇</button>
             <button id="chatSend">Ask ➤</button>
           </div>
           <div class="chips" id="chips"></div>
@@ -181,7 +186,11 @@ const money = n => n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFrac
 
 let user = null, role = 'viewer', allData = [], cur = 'dankotuwa', page = 1;
 const PER = 50;
-let botState = { mode:'query', sheet:null, data:{}, step:0, fieldsToFill:['INV NO','JOB NO','VEH NO','AMOUNT','CUSTOMER','CUSTOMER SEAL','CHK DATE','REMARKS'] };
+let ttsEnabled = false;
+
+// ඔයා ඉල්ලපු හරි පිළිවෙල
+const NEW_JOB_FIELDS = ['JOB NO', 'JB DATE', 'VEH NO', 'CUSTOMER', 'INV NO', 'CHK DATE', 'REMARKS', 'JOB STATUS', 'Handover To'];
+let botState = { mode:'query', sheet:null, data:{}, step:0, fieldsToFill: NEW_JOB_FIELDS };
 
 // API CONNECTION
 async function fetchData() {
@@ -189,8 +198,10 @@ async function fetchData() {
   $('#loading').innerText = '⏳ Syncing with Google Sheets...';
   try {
     const res = await fetch(GOOGLE_SHEET_API_URL);
-    allData = await res.json();
-    allData = allData.map(r => {
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+    
+    allData = data.map(r => {
        r.id = String(r.id || '');
        r.amount = String(r.amount || '');
        return r;
@@ -198,7 +209,7 @@ async function fetchData() {
     $('#loading').style.display = 'none';
     renderAll();
   } catch(e) {
-    $('#loading').innerText = '❌ Error: ' + e.message;
+    $('#loading').innerHTML = `<div style="color:red;padding:20px;font-weight:bold">❌ Error: ${e.message}<br><br><span style="font-size:12px;font-weight:normal;color:#333">කරුණාකර ඔයාගේ Google Apps Script URL එක සහ Deploy කරලා තියෙන විදිය (Anyone) නැවත පරීක්ෂා කරන්න.</span></div>`;
   }
 }
 
@@ -211,11 +222,11 @@ async function syncAction(action, payload) {
 }
 
 // ================================================================
-// AUTH (Simple Local)
+// AUTH
 // ================================================================
 function doLogin() {
   const p = $('#loginPassword').value;
-  if (p === 'Cs@6252') {
+  if (p === 'admin123') {
     role = 'admin'; user = { email: 'Admin' };
   } else if (p === 'viewer') {
     role = 'viewer'; user = { email: 'Viewer' };
@@ -296,7 +307,6 @@ document.addEventListener('focusout', async e => {
   await syncAction('update', { id: id, key: key, value: nv });
   rec[key] = nv;
   td.innerText = nv;
-  td.className = '';
 });
 
 document.addEventListener('click', async e => {
@@ -460,10 +470,17 @@ async function botQuery(qRaw){
 }
 
 // ================================================================
-// AI NEW ENTRY WIZARD
+// AI NEW ENTRY WIZARD (ඔයා ඉල්ලපු පිළිවෙල)
 // ================================================================
 function startNewEntry(){
-  botState = { mode:'new_entry', sheet:null, data:{}, step:-1 };
+  // පිළිවෙල වෙනස් කරලා තියෙනවා
+  botState = { 
+    mode:'new_entry', 
+    sheet:null, 
+    data:{}, 
+    step:-1, 
+    fieldsToFill: ['JOB NO', 'JB DATE', 'VEH NO', 'CUSTOMER', 'INV NO', 'CHK DATE', 'REMARKS', 'JOB STATUS', 'Handover To'] 
+  };
   addMsg(`📝 **New Job Entry Started**\n\nමේ job එක එකතු කරන්නේ කොහෙද?\nType හෝ කියන්න: **Dankotuwa** හෝ **Royal**`, 'bot');
 }
 
@@ -487,7 +504,7 @@ function processNewEntry(q){
     else { return '❓ කරුණාකර **Dankotuwa** හෝ **Royal** කියලා type කරන්න.'; }
     
     botState.step = 0;
-    return `✅ Sheet: ${SHEET_NAMES[botState.sheet]}\n\n1️⃣ **INV NO** එක type කරන්න හෝ කියන්න:`;
+    return `✅ Sheet: ${SHEET_NAMES[botState.sheet]}\n\n1️⃣ **${botState.fieldsToFill[0]}** type කරන්න හෝ කියන්න:`;
   }
 
   const fields = botState.fieldsToFill;
@@ -554,12 +571,56 @@ async function sendChat(){
     let ans = await handleChat(q);
     if(ans === null) { loading.remove(); return; }
     loading.innerHTML = String(ans).replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+    speakText(ans); // Voice output
   } catch(e) { loading.innerHTML = '❌ Error: ' + esc(e.message); }
   $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
 }
 
 $('#chatSend')?.addEventListener('click', sendChat);
 $('#chatBox')?.addEventListener('keydown', e => { if(e.key==='Enter') sendChat(); });
+
+// ================================================================
+// VOICE (MIC & TTS)
+// ================================================================
+$('#ttsToggle')?.addEventListener('click', () => {
+  ttsEnabled = !ttsEnabled;
+  $('#ttsToggle').innerText = ttsEnabled ? '🔊' : '🔇';
+  $('#ttsToggle').style.background = ttsEnabled ? '#15803d' : '#64748b';
+  if(ttsEnabled) speakText("Voice output enabled");
+});
+
+function speakText(text) {
+  if(!ttsEnabled) return;
+  window.speechSynthesis.cancel();
+  let clean = text.replace(/[*#•]/g, '').replace(/<[^>]*>/g, '').replace(/Rs/g, 'Rupees ');
+  const utt = new SpeechSynthesisUtterance(clean);
+  utt.lang = 'en-US';
+  window.speechSynthesis.speak(utt);
+}
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if(SpeechRecognition) {
+  const recog = new SpeechRecognition();
+  recog.lang = 'en-US';
+  recog.interimResults = false;
+  
+  $('#micBtn')?.addEventListener('click', () => {
+    $('#micBtn').style.background = '#dc2626';
+    $('#chatBox').placeholder = "🎤 අහගෙන ඉන්නවා...";
+    recog.start();
+  });
+
+  recog.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    $('#chatBox').value = text;
+    $('#micBtn').style.background = '#0ea5e9';
+    $('#chatBox').placeholder = "ප්‍රශ්නයක් අහන්න... (උදා: 183985)";
+    sendChat();
+  };
+  
+  recog.onspeechend = () => recog.stop();
+  recog.onerror = () => { $('#micBtn').style.background = '#0ea5e9'; };
+}
 
 function renderAll(){
   if($('#tab-dash').classList.contains('active')) renderDash();
@@ -589,10 +650,6 @@ $$('nav button').forEach(btn => btn.addEventListener('click', () => {
     }
   }
 }));
-
-// Show Login
-$('#loading').style.display = 'none';
-$('#loginScreen').style.display = 'block';
 </script>
 </body>
 </html>
