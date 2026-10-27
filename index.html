@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dankotuwa & Royal — Check Sheet</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f1f5f9;--line:#e2e8f0;--txt:#0f172a;--mut:#64748b;--pri:#1d4ed8;--ok:#15803d;--bad:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Segoe UI',system-ui,'Iskoola Pota',sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+#loading{padding:60px;text-align:center;font-size:16px;color:var(--mut)}
+.loginBox{max-width:380px;margin:80px auto;background:#fff;padding:32px;border-radius:14px;border:1px solid var(--line);box-shadow:0 4px 20px rgba(0,0,0,.06)}
+.loginBox h2{margin:0 0 20px;text-align:center}
+.loginBox input{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:9px;margin-bottom:10px;font-size:14px;font-family:inherit}
+.loginBox button{width:100%;padding:11px;background:var(--pri);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.loginBox p{text-align:center;margin-top:14px;font-size:13px;color:var(--mut)}
+.loginBox a{color:var(--pri)}
+#loginMsg{margin-top:10px;font-size:13px;text-align:center;color:var(--bad)}
+header{background:linear-gradient(135deg,#1e3a8a,#0284c7);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+header b{font-size:16px}
+#userEmail{font-size:12px;opacity:.85;margin-left:8px}
+.roleBadge{padding:3px 9px;border-radius:14px;font-size:11px;font-weight:700;margin-left:8px;background:rgba(255,255,255,.2)}
+.role-admin{background:#f59e0b}
+.role-viewer{background:#64748b}
+.btn{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12.5px;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn:hover{background:rgba(255,255,255,.3)}
+.btn.ghost{background:transparent}
+nav{display:flex;gap:2px;background:#fff;padding:0 14px;border-bottom:1px solid var(--line);overflow-x:auto;position:sticky;top:0;z-index:20}
+nav button{background:none;border:none;padding:13px 16px;cursor:pointer;font-size:13.5px;font-family:inherit;color:var(--mut);border-bottom:3px solid transparent;white-space:nowrap;font-weight:500}
+nav button.active{color:var(--pri);border-bottom-color:var(--pri)}
+main{padding:16px;max-width:1900px;margin:0 auto}
+.tab{display:none}.tab.active{display:block}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat .lbl{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.stat .val{font-size:22px;font-weight:700;margin-top:6px}
+.stat.ok .val{color:var(--ok)}.stat.bad .val{color:var(--bad)}.stat.pri .val{color:var(--pri)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+input[type=text],input[type=search],select{padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;outline:none}
+input:focus,select:focus{border-color:#0284c7;box-shadow:0 0 0 3px rgba(2,132,199,.15)}
+.tblwrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:10px;background:#fff}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+thead th{position:sticky;top:0;background:#1e293b;color:#fff;padding:9px 10px;text-align:left;font-weight:600;font-size:11.5px;white-space:nowrap;z-index:5}
+tbody td{padding:6px 10px;border-bottom:1px solid #f1f5f9;white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis}
+tbody tr:hover td{background:#f8fafc}
+tbody td[contenteditable]:focus{outline:2px solid #0284c7;background:#eff6ff;white-space:normal}
+td.cell-ok{color:var(--ok)}td.cell-bad{color:var(--bad);font-weight:600}
+td.act{width:38px;text-align:center}
+button.del{background:#fee2e2;color:#b91c1c;border:none;border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:12px}
+button.del:hover{background:#fecaca}
+.pager{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px}
+.pager button{padding:6px 13px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px}
+.pager button:disabled{opacity:.4;cursor:default}
+#chatWrap{display:flex;flex-direction:column;height:calc(100vh - 220px);min-height:420px}
+#chatLog{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;padding:10px 14px;border-radius:14px;line-height:1.55;font-size:13.5px;white-space:pre-wrap;word-wrap:break-word}
+.msg.user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
+.msg.bot{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg table{margin:8px 0;font-size:12px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.msg th{background:#334155;color:#fff;padding:5px 8px;font-size:11px;text-align:left}
+.msg td{padding:4px 8px;border-top:1px solid #f1f5f9}
+#chatInput{display:flex;gap:8px;margin-top:10px}
+#chatInput input{flex:1;padding:11px 14px;border-radius:10px}
+#chatInput button{padding:11px 20px;background:var(--pri);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:5px 11px;border-radius:20px;font-size:12px;cursor:pointer}
+.chip:hover{background:#bae6fd}
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal-box{background:#fff;border-radius:14px;width:100%;max-width:820px;max-height:90vh;overflow:auto;padding:20px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut);font-weight:600}
+.form input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit}
+.modal-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.modal-foot button{padding:9px 18px;border-radius:9px;border:1px solid var(--line);background:#fff;cursor:pointer;font-family:inherit;font-size:13px}
+.modal-foot button.primary{background:var(--pri);color:#fff;border-color:var(--pri)}
+.warn{background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<div id="loading">⏳ Loading...</div>
+
+<div id="loginScreen" style="display:none">
+  <div class="loginBox">
+    <h2>📦 Check Sheet Login</h2>
+    <div id="loginForm">
+      <input type="email" id="loginEmail" placeholder="Email">
+      <input type="password" id="loginPassword" placeholder="Password">
+      <button onclick="doLogin()">Login</button>
+      <p>No account? <a href="#" onclick="showSignup();return false">Sign Up</a></p>
+    </div>
+    <div id="signupForm" style="display:none">
+      <input type="email" id="signupEmail" placeholder="Email">
+      <input type="password" id="signupPassword" placeholder="Password (min 6)">
+      <button onclick="doSignup()">Sign Up</button>
+      <p>Have account? <a href="#" onclick="showLogin();return false">Login</a></p>
+    </div>
+    <div id="loginMsg"></div>
+  </div>
+</div>
+
+<div id="appScreen" style="display:none">
+  <header>
+    <div>
+      <b>📦 Check Sheet</b>
+      <span id="userEmail"></span>
+      <span id="userRole" class="roleBadge"></span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <label id="importWrap" class="btn">📁 Import Excel<input type="file" id="fileXlsx" accept=".xlsx,.xls" hidden></label>
+      <button id="btnAdd" class="btn">➕ New</button>
+      <button id="btnExport" class="btn">⬇ Export</button>
+      <button onclick="doLogout()" class="btn ghost">Logout</button>
+    </div>
+  </header>
+
+  <nav>
+    <button data-tab="dash" class="active">Dashboard</button>
+    <button data-tab="dankotuwa">Dankotuwa old</button>
+    <button data-tab="royal">Royal frn</button>
+    <button data-tab="bot">🤖 AI Bot</button>
+  </nav>
+
+  <main>
+    <section id="tab-dash" class="tab active">
+      <div id="dashBody"></div>
+    </section>
+    <section id="tab-grid" class="tab">
+      <div class="card">
+        <div class="toolbar">
+          <input type="search" id="search" placeholder="🔍 Search..." style="flex:1;min-width:240px">
+          <select id="statusFilter">
+            <option value="">All Status</option>
+            <option value="CHKD">CHKD</option>
+            <option value="RTN">RTN</option>
+          </select>
+          <span id="sheetLabel" style="font-weight:600;color:var(--pri)"></span>
+        </div>
+        <div class="tblwrap">
+          <table>
+            <thead id="gridHead"></thead>
+            <tbody id="gridBody"></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button id="prevPage">◀ Prev</button>
+          <span id="pageInfo"></span>
+          <button id="nextPage">Next ▶</button>
+        </div>
+      </div>
+    </section>
+    <section id="tab-bot" class="tab">
+      <div class="card" style="padding:14px">
+        <div id="chatWrap">
+          <div id="chatLog"></div>
+          <div id="chatInput">
+            <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... e.g. PQ 0366 total?">
+            <button id="chatSend">Ask ➤</button>
+          </div>
+          <div class="chips" id="chips"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+// ================================================================
+// ⚠️ REPLACE THESE WITH YOUR SUPABASE VALUES
+// ================================================================
+const SUPABASE_URL = 'https://fjdrcrokhujomcwjwrze.supabase.co/rest/v1/';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqZHJjcm9raHVqb21jd2p3cnplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxMDI0MzMsImV4cCI6MjEwODY3ODQzM30.PwlmHmvA27vCmE9ywHWuMgcdNeeCGLbeSSCiX_vmDtw';
+
+let sb;
+try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+catch(e) { document.getElementById('loading').innerHTML = '⚠️ Supabase config error: ' + e.message; }
+
+// ================================================================
+const FIELDS = ["JOB NO","JB DATE","VEH NO","Driver","ROUTE","CUSTOMER","CUS CODE","INV NO",
+"ALL Pg No","AMOUNT","CUSTOMER SEAL","CHK DATE","JOB TYPE","REMARKS","JOB STATUS",
+"Handover To","ENTERED BY","ENTERED AT"];
+const FIELD_KEYS = {"JOB NO":"job_no","JB DATE":"jb_date","VEH NO":"veh_no","Driver":"driver","ROUTE":"route",
+"CUSTOMER":"customer","CUS CODE":"cus_code","INV NO":"inv_no","ALL Pg No":"all_pg_no","AMOUNT":"amount",
+"CUSTOMER SEAL":"customer_seal","CHK DATE":"chk_date","JOB TYPE":"job_type","REMARKS":"remarks",
+"JOB STATUS":"job_status","Handover To":"handover_to","ENTERED BY":"entered_by","ENTERED AT":"entered_at"};
+const SHEET_NAMES = { dankotuwa:"Dankotuwa old", royal:"Royal frn" };
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const norm = s => String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+const num = v => { const n = parseFloat(String(v==null?"":v).replace(/[^0-9.\-]/g,"")); return isNaN(n)?0:n; };
+const money = n => n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+let user = null, role = 'viewer', records = [], cur = 'dankotuwa', page = 1;
+const PER = 50;
+let botState = { mode:'query', record:null, fieldsToFill:[], idx:0 };
+
+// ================================================================
+// AUTH
+// ================================================================
+async function initAuth() {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await onLogin(session.user);
+    else showLoginScreen();
+    sb.auth.onAuthStateChange(async (_, s) => {
+      if (s) await onLogin(s.user);
+      else { user=null; role='viewer'; showLoginScreen(); }
+    });
+  } catch(e) {
+    $('#loading').innerHTML = '<div style="color:#dc2626;padding:40px;text-align:center">⚠️ ' + esc(e.message) + '<br><br>Supabase URL/key check කරන්න.</div>';
+  }
+}
+
+async function onLogin(u) {
+  user = u;
+  const { data } = await sb.from('user_roles').select('role').eq('user_id', u.id).maybeSingle();
+  role = data?.role || 'viewer';
+  $('#userEmail').textContent = u.email;
+  $('#userRole').textContent = role.toUpperCase();
+  $('#userRole').className = 'roleBadge role-' + role;
+  applyRoleUI();
+  await loadRecords();
+  showAppScreen();
+}
+
+function applyRoleUI() {
+  const admin = role === 'admin';
+  $('#importWrap').style.display = admin ? 'inline-flex' : 'none';
+  $('#btnAdd').style.display = admin ? 'inline-flex' : 'none';
+}
+function showLoginScreen(){ $('#loading').style.display='none'; $('#loginScreen').style.display='block'; $('#appScreen').style.display='none'; }
+function showAppScreen(){ $('#loading').style.display='none'; $('#loginScreen').style.display='none'; $('#appScreen').style.display='block'; renderAll(); }
+function showSignup(){ $('#loginForm').style.display='none'; $('#signupForm').style.display='block'; }
+function showLogin(){ $('#signupForm').style.display='none'; $('#loginForm').style.display='block'; }
+
+async function doLogin() {
+  $('#loginMsg').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({
+    email: $('#loginEmail').value.trim(), password: $('#loginPassword').value
+  });
+  if (error) $('#loginMsg').textContent = error.message;
+}
+async function doSignup() {
+  $('#loginMsg').textContent = '';
+  const { error } = await sb.auth.signUp({
+    email: $('#signupEmail').value.trim(), password: $('#signupPassword').value
+  });
+  if (error) $('#loginMsg').textContent = error.message;
+  else $('#loginMsg').style.color = '#15803d', $('#loginMsg').textContent = '✅ Account created. Please login.';
+}
+async function doLogout() { await sb.auth.signOut(); }
+
+// ================================================================
+// DATA
+// ================================================================
+async function loadRecords() {
+  const { data, error } = await sb.from('records').select('*').eq('sheet', cur).order('id', {ascending:true});
+  if (error) { alert('Load error: ' + error.message); return; }
+  records = data || [];
+}
+async function switchSheet(k){ cur=k; page=1; await loadRecords(); }
+
+// ================================================================
+// GRID
+// ================================================================
+function renderGrid(){
+  const q = ($('#search')?.value||'').toLowerCase();
+  const st = ($('#statusFilter')?.value||'').toUpperCase();
+  let rows = records.slice();
+  if(q) rows = rows.filter(r => FIELDS.some(f => String(r[FIELD_KEYS[f]]||'').toLowerCase().includes(q)));
+  if(st) rows = rows.filter(r => String(r.job_status||'').toUpperCase().includes(st));
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total/PER));
+  if(page>pages) page = pages;
+  const slice = rows.slice((page-1)*PER, page*PER);
+  const admin = role==='admin';
+
+  $('#gridHead').innerHTML = '<tr>' + FIELDS.map(f=>`<th>${esc(f)}</th>`).join('') + (admin?'<th></th>':'') + '</tr>';
+
+  if(!slice.length){
+    $('#gridBody').innerHTML = `<tr><td colspan="${FIELDS.length+(admin?1:0)}" style="text-align:center;padding:40px;color:#94a3b8">
+      දත්ත නැහැ${admin?' — 📁 Import Excel කරන්න':''}</td></tr>`;
+  } else {
+    $('#gridBody').innerHTML = slice.map(r => {
+      const tds = FIELDS.map(f => {
+        const v = r[FIELD_KEYS[f]] || '';
+        let cls = '';
+        if(f==='CUSTOMER SEAL') cls = /❌/.test(v)?'cell-bad':(/✅/.test(v)?'cell-ok':'');
+        if(f==='JOB STATUS'){ const u=v.toUpperCase(); cls = u.includes('RTN')?'cell-bad':(u.includes('CHKD')?'cell-ok':''); }
+        return `<td ${admin?'contenteditable="true"':''} class="${cls}" data-id="${r.id}" data-k="${FIELD_KEYS[f]}">${esc(v)}</td>`;
+      }).join('');
+      return `<tr>${tds}${admin?`<td class="act"><button class="del" data-id="${r.id}">✕</button></td>`:''}</tr>`;
+    }).join('');
+  }
+  $('#pageInfo').textContent = `Page ${page}/${pages} — ${total}`;
+  $('#prevPage').disabled = page<=1;
+  $('#nextPage').disabled = page>=pages;
+}
+
+document.addEventListener('focusout', async e => {
+  const td = e.target.closest('td[contenteditable="true"]'); if(!td) return;
+  const id = +td.dataset.id, key = td.dataset.k, nv = td.innerText.trim();
+  const rec = records.find(r => r.id === id);
+  if(!rec || String(rec[key]||'') === nv) return;
+  const { error } = await sb.from('records').update({[key]: nv}).eq('id', id);
+  if(error){ alert(error.message); td.innerText = rec[key]||''; }
+  else rec[key] = nv;
+});
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('.del'); if(!b) return;
+  if(!confirm('Delete this row?')) return;
+  const id = +b.dataset.id;
+  const { error } = await sb.from('records').delete().eq('id', id);
+  if(error){ alert(error.message); return; }
+  records = records.filter(r => r.id !== id);
+  renderAll();
+});
+
+// ================================================================
+// IMPORT
+// ================================================================
+$('#fileXlsx')?.addEventListener('change', e => {
+  if(role!=='admin') return;
+  const file = e.target.files[0]; if(!file) return;
+  const rd = new FileReader();
+  rd.onload = async ev => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+      const results = [];
+      for(const sn of wb.SheetNames){
+        let key = null;
+        if(/royal/i.test(sn)) key = 'royal';
+        else if(/dankotuwa|danktw|dnktw/i.test(sn)) key = 'dankotuwa';
+        if(!key) continue;
+        const rows = parseSheet(wb.Sheets[sn]);
+        await sb.from('records').delete().eq('sheet', key);
+        for(let i=0; i<rows.length; i+=200){
+          const batch = rows.slice(i, i+200).map(r => ({sheet:key, ...r}));
+          const { error } = await sb.from('records').insert(batch);
+          if(error) throw error;
+        }
+        results.push(`${SHEET_NAMES[key]}: ${rows.length} rows`);
+      }
+      await loadRecords();
+      renderAll();
+      alert('✅ Import OK!\n\n' + results.join('\n'));
+    } catch(err){ alert('❌ ' + err.message); }
+  };
+  rd.readAsArrayBuffer(file);
+  e.target.value = '';
+});
+
+function parseSheet(ws){
+  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false, blankrows:false, dateNF:'yyyy-mm-dd'});
+  let hi = -1;
+  for(let i=0; i<Math.min(aoa.length,12); i++)
+    if((aoa[i]||[]).some(c => String(c).trim().toUpperCase() === 'JOB NO')){ hi = i; break; }
+  if(hi<0) hi = 0;
+  const out = [];
+  for(let i=hi+1; i<aoa.length; i++){
+    const r = aoa[i] || [];
+    const o = {};
+    FIELDS.forEach((f,j)=>{ o[FIELD_KEYS[f]] = r[j]==null?'':String(r[j]).trim(); });
+    const jn = String(o.job_no||'').toUpperCase();
+    if(jn==='JOB NO' || jn==='CUS & CODE' || jn==='CUS AND CODE') continue;
+    if(!o.inv_no && !o.amount && !o.veh_no && !o.job_no && !o.customer_seal) continue;
+    out.push(o);
+  }
+  return out;
+}
+
+// ================================================================
+// NAV
+// ================================================================
+$$('nav button').forEach(btn => btn.addEventListener('click', async () => {
+  const t = btn.dataset.tab;
+  $$('nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  $$('.tab').forEach(s => s.classList.remove('active'));
+  if(t==='dankotuwa' || t==='royal'){
+    await switchSheet(t);
+    $('#tab-grid').classList.add('active');
+    $('#sheetLabel').textContent = SHEET_NAMES[cur];
+    renderGrid();
+  } else {
+    $('#tab-'+t).classList.add('active');
+    if(t==='dash') renderDash();
+    if(t==='bot'){
+      updateBotChips();
+      if(!$('#chatLog').children.length) addMsg('👋 ආයුබෝවන්! මම Check Sheet Assistant.\n\n' +
+        'Queries: "Dankotuwa total amount?", "RTN jobs", "PQ 0366 jobs"\n' +
+        (role==='admin' ? 'Updates: "update INV 2026060047 JOB NO to 183985"\nGuided: "fill missing"' : '') +
+        '\n\n"help" type කරලා බලන්න 🤖', 'bot');
+    }
+  }
+}));
+
+$('#search')?.addEventListener('input', ()=>{page=1;renderGrid()});
+$('#statusFilter')?.addEventListener('change', ()=>{page=1;renderGrid()});
+$('#prevPage')?.addEventListener('click', ()=>{if(page>1){page--;renderGrid()}});
+$('#nextPage')?.addEventListener('click', ()=>{page++;renderGrid()});
+
+// ================================================================
+// DASHBOARD
+// ================================================================
+function calcStats(arr){
+  const s = {n:arr.length, chkd:0, rtn:0, amt:0, sealBad:0, veh:{}};
+  arr.forEach(r => {
+    const st = String(r.job_status||'').toUpperCase();
+    if(st.includes('CHKD')) s.chkd++;
+    else if(st.includes('RTN')) s.rtn++;
+    s.amt += num(r.amount);
+    if(/❌/.test(r.customer_seal||'')) s.sealBad++;
+    const v = String(r.veh_no||'').trim().toUpperCase();
+    if(v) s.veh[v] = (s.veh[v]||0)+1;
+  });
+  return s;
+}
+
+async function renderDash(){
+  const [a, b] = await Promise.all([
+    sb.from('records').select('*').eq('sheet','dankotuwa'),
+    sb.from('records').select('*').eq('sheet','royal')
+  ]);
+  const dData = a.data||[], rData = b.data||[];
+  const d = calcStats(dData), r = calcStats(rData);
+  if(!d.n && !r.n){
+    $('#dashBody').innerHTML = `<div class="warn">තවම දත්ත නැහැ${role==='admin'?' — Import Excel කරන්න':''}.</div>`;
+    return;
+  }
+  const card = (l,v,c='') => `<div class="stat ${c}"><div class="lbl">${l}</div><div class="val">${v}</div></div>`;
+  const topVeh = arr => {
+    const e = Object.entries(calcStats(arr).veh).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    if(!e.length) return '<div style="color:#94a3b8;padding:10px">—</div>';
+    return '<table style="width:100%;font-size:13px"><tbody>' +
+      e.map(([v,c],i)=>`<tr><td style="padding:4px 0">${i+1}. <b>${esc(v)}</b></td><td style="text-align:right;color:#64748b">${c} jobs</td></tr>`).join('') +
+      '</tbody></table>';
+  };
+  $('#dashBody').innerHTML = `
+    <h3>📋 Dankotuwa old</h3>
+    <div class="stats">
+      ${card('Total', d.n, 'pri')}${card('CHKD', d.chkd, 'ok')}${card('RTN', d.rtn, 'bad')}
+      ${card('Amount', 'Rs ' + money(d.amt), 'pri')}${card('Seal Issues', d.sealBad, 'bad')}
+    </div>
+    <div class="card"><b>🚚 Top Vehicles</b>${topVeh(dData)}</div>
+    <h3 style="margin-top:22px">📋 Royal frn</h3>
+    <div class="stats">
+      ${card('Total', r.n, 'pri')}${card('CHKD', r.chkd, 'ok')}${card('RTN', r.rtn, 'bad')}
+      ${card('Amount', 'Rs ' + money(r.amt), 'pri')}${card('Seal Issues', r.sealBad, 'bad')}
+    </div>
+    <div class="card"><b>🚚 Top Vehicles</b>${topVeh(rData)}</div>
+  `;
+}
+
+// ================================================================
+// NEW ENTRY
+// ================================================================
+$('#btnAdd')?.addEventListener('click', () => {
+  if(role !== 'admin') return;
+  const sheet = cur;
+  const html = FIELDS.map(f => `<label>${esc(f)}<input data-k="${FIELD_KEYS[f]}"></label>`).join('');
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `<div class="modal-box"><h3>➕ New — ${SHEET_NAMES[sheet]}</h3>
+    <div class="form">${html}</div>
+    <div class="modal-foot"><button class="cancel">Cancel</button><button class="primary save">Save</button></div></div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('.cancel').onclick = () => modal.remove();
+  modal.querySelector('.save').onclick = async () => {
+    const o = { sheet };
+    modal.querySelectorAll('input[data-k]').forEach(i => o[i.dataset.k] = i.value.trim());
+    if(!Object.values(o).some(v => v && v !== sheet)){ alert('Fill at least one field'); return; }
+    if(!o.entered_at) o.entered_at = new Date().toISOString();
+    const { error } = await sb.from('records').insert(o);
+    if(error){ alert(error.message); return; }
+    modal.remove();
+    await loadRecords();
+    renderAll();
+  };
+});
+
+// ================================================================
+// EXPORT
+// ================================================================
+$('#btnExport')?.addEventListener('click', async () => {
+  const wb = XLSX.utils.book_new();
+  for(const k of ['dankotuwa','royal']){
+    const { data } = await sb.from('records').select('*').eq('sheet', k);
+    const aoa = [FIELDS, ...(data||[]).map(r => FIELDS.map(f => r[FIELD_KEYS[f]]||''))];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), SHEET_NAMES[k]);
+  }
+  XLSX.writeFile(wb, 'Check_Sheet_' + new Date().toISOString().slice(0,10) + '.xlsx');
+});
+
+// ================================================================
+// AI BOT
+// ================================================================
+const FIELD_ALIASES = {
+  'job no':'JOB NO','jobno':'JOB NO','job number':'JOB NO',
+  'veh no':'VEH NO','vehno':'VEH NO','vehicle no':'VEH NO','vehicle':'VEH NO',
+  'driver':'Driver','route':'ROUTE','rout':'ROUTE',
+  'customer':'CUSTOMER','inv no':'INV NO','invoice no':'INV NO','invoice':'INV NO','invno':'INV NO',
+  'amount':'AMOUNT','total':'AMOUNT',
+  'seal':'CUSTOMER SEAL','customer seal':'CUSTOMER SEAL',
+  'chk date':'CHK DATE','check date':'CHK DATE','date':'CHK DATE',
+  'status':'JOB STATUS','job status':'JOB STATUS',
+  'remarks':'REMARKS','remark':'REMARKS','note':'REMARKS',
+  'handover':'Handover To','handover to':'Handover To'
+};
+
+function parseUpdate(q){
+  const lower = q.toLowerCase();
+  let field=null, fieldIdx=-1, fieldLen=0;
+  for(const alias of Object.keys(FIELD_ALIASES).sort((a,b)=>b.length-a.length)){
+    const idx = lower.indexOf(alias);
+    if(idx>=0 && alias.length>fieldLen){ field=FIELD_ALIASES[alias]; fieldIdx=idx; fieldLen=alias.length; }
+  }
+  if(!field) return null;
+  const before = q.substring(0, fieldIdx);
+  const after = q.substring(fieldIdx + fieldLen);
+  let invNo = null;
+  const bm = before.match(/(\d{6,})/);
+  if(bm) invNo = bm[1];
+  else { const am = after.match(/(\d{6,})/); if(am) invNo = am[1]; }
+  if(!invNo) return null;
+  let value = null;
+  const vm = after.match(/(?:to|as|=|is|with|:)\s*(.+)$/i);
+  if(vm) value = vm[1].trim();
+  else value = after.trim();
+  value = value.replace(/^[:\-\s]+/, '').trim();
+  if(!value || value === invNo) return null;
+  return { invNo, field, value };
+}
+
+async function doUpdate(invNo, field, value){
+  if(role !== 'admin') return '🔒 Admin only.';
+  const { data, error } = await sb.from('records').select('id')
+    .eq('sheet', cur).or(`inv_no.eq.${invNo},job_no.eq.${invNo}`);
+  if(error) return 'Query error: ' + error.message;
+  if(!data || !data.length) return `❌ INV/JOB ${invNo} not found in ${SHEET_NAMES[cur]}`;
+  const key = FIELD_KEYS[field];
+  for(const r of data){
+    const { error: e2 } = await sb.from('records').update({[key]: value}).eq('id', r.id);
+    if(e2) return 'Update failed: ' + e2.message;
+  }
+  await loadRecords(); renderAll();
+  return `✅ Updated ${data.length} record(s): **${field}** = "${value}"`;
+}
+
+function findIncomplete(){
+  const needs = (r,f) => !String(r[FIELD_KEYS[f]]||'').trim();
+  return records.filter(r => {
+    if(needs(r,'INV NO')) return false;
+    return needs(r,'JOB NO') || needs(r,'VEH NO') || needs(r,'CUSTOMER SEAL') || needs(r,'CHK DATE') || needs(r,'JOB STATUS');
+  });
+}
+
+function startGuided(){
+  const list = findIncomplete();
+  if(!list.length) return '✅ සියලුම records සම්පූර්ණයි!';
+  botState = { mode:'guided', record:list[0], fieldsToFill:[], idx:0 };
+  ['JOB NO','VEH NO','CUSTOMER SEAL','CHK DATE','JOB STATUS'].forEach(f => {
+    if(!String(botState.record[FIELD_KEYS[f]]||'').trim()) botState.fieldsToFill.push(f);
+  });
+  return guidedQuestion();
+}
+
+function guidedQuestion(){
+  const r = botState.record;
+  if(!r) return 'Guided mode ended.';
+  if(botState.idx >= botState.fieldsToFill.length){
+    const list = findIncomplete().filter(x => x.id !== r.id);
+    if(!list.length){ botState = {mode:'query'}; return '✅ සියලුම records සම්පූර්ණයි! Guided mode අවසන්.'; }
+    botState.record = list[0];
+    botState.idx = 0;
+    botState.fieldsToFill = [];
+    ['JOB NO','VEH NO','CUSTOMER SEAL','CHK DATE','JOB STATUS'].forEach(f => {
+      if(!String(botState.record[FIELD_KEYS[f]]||'').trim()) botState.fieldsToFill.push(f);
+    });
+    return guidedQuestion();
+  }
+  const f = botState.fieldsToFill[botState.idx];
+  const r2 = botState.record;
+  const hints = {'JOB NO':'(e.g. 183985)','VEH NO':'(e.g. PQ 0366)','CUSTOMER SEAL':'(✅ or ❌ Cus)','CHK DATE':'(YYYY-MM-DD)','JOB STATUS':'(CHKD or RTN)'};
+  return `📝 **INV ${r2.inv_no}** ${r2.veh_no?'('+r2.veh_no+')':''}\n` +
+         `❓ **${f}** missing. ${hints[f]||''}\n\n` +
+         `Value type කරන්න (or "skip" / "cancel")\n` +
+         `Progress: ${botState.idx+1}/${botState.fieldsToFill.length}`;
+}
+
+async function handleGuidedAnswer(q){
+  const cmd = q.toLowerCase().trim();
+  if(cmd==='cancel'||cmd==='stop'||cmd==='exit'){ botState={mode:'query'}; return '❌ Guided mode cancelled.'; }
+  if(cmd==='skip'){ botState.idx++; return guidedQuestion(); }
+  const r = botState.record;
+  const f = botState.fieldsToFill[botState.idx];
+  const key = FIELD_KEYS[f];
+  const { error } = await sb.from('records').update({[key]: q}).eq('id', r.id);
+  if(error) return '❌ Update failed: ' + error.message;
+  r[key] = q;
+  botState.idx++;
+  return `✅ ${f} = "${q}" saved.\n\n` + guidedQuestion();
+}
+
+function miniTable(rows, limit=12){
+  if(!rows.length) return '';
+  const cols = ['job_no','veh_no','inv_no','amount','job_status','chk_date'];
+  const names = ['JOB','VEH','INV','AMOUNT','STATUS','DATE'];
+  let h = '<table><thead><tr>' + names.map(n=>`<th>${n}</th>`).join('') + '</tr></thead><tbody>';
+  rows.slice(0,limit).forEach(r => {
+    h += '<tr>' + cols.map(c => {
+      let v = r[c] || '';
+      if(c==='amount' && v) v = money(num(v));
+      return `<td>${esc(v)}</td>`;
+    }).join('') + '</tr>';
+  });
+  h += '</tbody></table>';
+  if(rows.length > limit) h += `<small style="color:#94a3b8">...තව ${rows.length-limit}</small>`;
+  return h;
+}
+
+async function botQuery(qRaw){
+  const q = qRaw.toLowerCase().trim();
+  if(!q) return 'ප්‍රශ්නයක් අහන්න 🙂';
+  if(/^(help|උදව්|mokakda|what can)/.test(q)) return HELP_TEXT;
+  let src = cur;
+  if(/royal/.test(q)) src='royal';
+  else if(/dankotuwa|danktw|dnktw/.test(q)) src='dankotuwa';
+  const { data } = await sb.from('records').select('*').eq('sheet', src);
+  const rows = data||[];
+  if(!rows.length) return `⚠️ ${SHEET_NAMES[src]} හි දත්ත නැහැ.`;
+  let filtered = rows.slice();
+  const desc = [];
+  const vm = qRaw.match(/\b([A-Za-z]{1,3})[\s\-]?(\d{3,4})\b/);
+  if(vm){ const key = norm(vm[1]+vm[2]); filtered = filtered.filter(r => norm(r.veh_no).includes(key)); desc.push('Vehicle '+vm[1].toUpperCase()+' '+vm[2]); }
+  if(/\brtn\b|return/.test(q)){ filtered = filtered.filter(r => /RTN/i.test(r.job_status||'')); desc.push('Status RTN'); }
+  else if(/chkd|checked/.test(q)){ filtered = filtered.filter(r => /CHKD/i.test(r.job_status||'')); desc.push('Status CHKD'); }
+  if(/seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q)){ filtered = filtered.filter(r => /❌/.test(r.customer_seal||'')); desc.push('Seal issues'); }
+  const im = qRaw.match(/\b(\d{6,12})\b/);
+  if(im && !vm){ filtered = filtered.filter(r => norm(r.inv_no).includes(im[1])); desc.push('INV '+im[1]); }
+  const ftxt = desc.length ? ' `('+desc.join(', ')+')`' : '';
+  if(/most|top|highest/.test(q) && /vehicle|lorry|veh/.test(q)){
+    const m = {};
+    filtered.forEach(r => { const v = String(r.veh_no||'').trim().toUpperCase(); if(v) m[v]=(m[v]||0)+1; });
+    const s = Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    if(!s.length) return 'දත්ත නැහැ.';
+    return `🚚 Top vehicles — ${SHEET_NAMES[src]}${ftxt}\n\n` + s.map(([v,c],i)=>`${i+1}. **${v}** — ${c}`).join('\n');
+  }
+  const wantSum = /total|sum|amount|mudal/.test(q);
+  const wantCount = /how many|count|keeyak|kiyak|ganana/.test(q);
+  const wantList = /list|show|pennanna|details|which|mona/.test(q);
+  if(wantSum || wantCount){
+    const t = filtered.reduce((a,r)=>a+num(r.amount),0);
+    let out = `📊 **${SHEET_NAMES[src]}**${ftxt}\n• Records: **${filtered.length}**\n• Amount: **Rs ${money(t)}**`;
+    if(wantList && filtered.length<=20) out += '\n' + miniTable(filtered, 10);
+    return out;
+  }
+  if(!filtered.length) return `🔍 "${qRaw}" — ප්‍රතිඵල නැහැ.`;
+  const t = filtered.reduce((a,r)=>a+num(r.amount),0);
+  return `📋 **${SHEET_NAMES[src]}**${ftxt}\n${filtered.length} records | Total: Rs ${money(t)}\n` + miniTable(filtered, 12);
+}
+
+const HELP_TEXT = `🤖 Queries:
+• "Dankotuwa total amount?"
+• "RTN jobs keeyak?"
+• "PQ 0366 jobs pennanna"
+• "Seal issues"
+• "Top vehicles"
+
+Updates (admin only):
+• "update INV 2026060047 JOB NO to 183985"
+• "set seal of 2026060047 to ✅ Cus"
+• "2026060047 amount = 678002.04"
+
+Guided fill (admin):
+• "fill missing" — missing data step by step
+• "skip" / "cancel"
+
+Sinhala / English දෙකෙන්ම 👍`;
+
+async function handleChat(q){
+  const lower = q.toLowerCase();
+  if(botState.mode === 'guided') return await handleGuidedAnswer(q);
+  if(/^(update|set|change|fill|edit)/.test(lower) || /=| to | as /.test(lower)){
+    const parsed = parseUpdate(q);
+    if(parsed) return await doUpdate(parsed.invNo, parsed.field, parsed.value);
+  }
+  if(/^(fill missing|guide|guided|auto fill|missing data|start fill)/.test(lower)){
+    if(role!=='admin') return '🔒 Admin only.';
+    return await startGuided();
+  }
+  return await botQuery(q);
+}
+
+function addMsg(text, who){
+  const div = document.createElement('div');
+  div.className = 'msg ' + who;
+  div.innerHTML = who==='bot' ? text.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>') : esc(text);
+  $('#chatLog').appendChild(div);
+  $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
+}
+
+async function sendChat(){
+  const box = $('#chatBox'), q = box.value.trim();
+  if(!q) return;
+  addMsg(q, 'user'); box.value = '';
+  const loading = addMsg('⏳...', 'bot');
+  try {
+    let ans = await handleChat(q);
+    if(typeof ans !== 'string') ans = String(ans);
+    loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  } catch(e){ loading.innerHTML = '❌ ' + esc(e.message); }
+  $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
+}
+
+$('#chatSend')?.addEventListener('click', sendChat);
+$('#chatBox')?.addEventListener('keydown', e => { if(e.key==='Enter') sendChat(); });
+
+function updateBotChips(){
+  const chips = role==='admin'
+    ? ['Dankotuwa total amount?', 'RTN jobs', 'Seal issues', 'fill missing', 'Top vehicles']
+    : ['Dankotuwa total amount?', 'RTN jobs', 'Seal issues', 'PQ 0366 jobs'];
+  $('#chips').innerHTML = chips.map(c => `<span class="chip">${esc(c)}</span>`).join('');
+  $$('#chips .chip').forEach(ch => ch.addEventListener('click', () => {
+    $('#chatBox').value = ch.textContent; sendChat();
+  }));
+}
+
+function renderAll(){
+  if($('#tab-dash').classList.contains('active')) renderDash();
+  if($('#tab-grid').classList.contains('active')) renderGrid();
+}
+
+initAuth();
+</script>
+</body>
+</html>
