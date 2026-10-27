@@ -59,12 +59,14 @@ button.del:hover{background:#fecaca}
 .msg{max-width:88%;padding:10px 14px;border-radius:14px;line-height:1.55;font-size:13.5px;white-space:pre-wrap;word-wrap:break-word}
 .msg.user{align-self:flex-end;background:var(--pri);color:#fff;border-bottom-right-radius:4px}
 .msg.bot{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px}
-.msg table{margin:8px 0;font-size:12px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.msg table{margin:8px 0;font-size:12px;border:1px solid var(--line);border-radius:6px;overflow:hidden;width:100%}
 .msg th{background:#334155;color:#fff;padding:5px 8px;font-size:11px;text-align:left}
 .msg td{padding:4px 8px;border-top:1px solid #f1f5f9}
 #chatInput{display:flex;gap:8px;margin-top:10px}
 #chatInput input{flex:1;padding:11px 14px;border-radius:10px}
 #chatInput button{padding:11px 20px;background:var(--pri);color:#fff;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-weight:600}
+#chatInput #micBtn{padding:0 15px;background:#0ea5e9;font-size:18px;display:flex;align-items:center;justify-content:center}
+#chatInput #ttsToggle{padding:0 12px;background:#64748b;font-size:16px;display:flex;align-items:center;justify-content:center}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chip{background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:5px 11px;border-radius:20px;font-size:12px;cursor:pointer}
 .chip:hover{background:#bae6fd}
@@ -157,12 +159,9 @@ button.del:hover{background:#fecaca}
         <div id="chatWrap">
           <div id="chatLog"></div>
           <div id="chatInput">
-  <button id="micBtn" title="Voice Search" style="background:#0ea5e9;border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:18px;padding:0 15px;">🎤</button>
-  <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... e.g. PQ 0366">
-  <button id="ttsToggle" title="Toggle Voice" style="background:#64748b;border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:16px;padding:0 12px;">🔇</button>
-  <button id="chatSend">Ask ➤</button>
-</div>
-            <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... e.g. PQ 0366 total?">
+            <button id="micBtn" title="Voice Search">🎤</button>
+            <input type="text" id="chatBox" placeholder="ප්‍රශ්නයක් අහන්න... e.g. PQ 0366">
+            <button id="ttsToggle" title="Toggle Voice">🔇</button>
             <button id="chatSend">Ask ➤</button>
           </div>
           <div class="chips" id="chips"></div>
@@ -328,7 +327,7 @@ document.addEventListener('click', async e => {
 });
 
 // ================================================================
-// IMPORT
+// IMPORT / EXPORT
 // ================================================================
 $('#fileXlsx')?.addEventListener('change', e => {
   if(role!=='admin') return;
@@ -379,6 +378,43 @@ function parseSheet(ws){
   }
   return out;
 }
+
+$('#btnExport')?.addEventListener('click', async () => {
+  const wb = XLSX.utils.book_new();
+  for(const k of ['dankotuwa','royal']){
+    const { data } = await sb.from('records').select('*').eq('sheet', k);
+    const aoa = [FIELDS, ...(data||[]).map(r => FIELDS.map(f => r[FIELD_KEYS[f]]||''))];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), SHEET_NAMES[k]);
+  }
+  XLSX.writeFile(wb, 'Check_Sheet_' + new Date().toISOString().slice(0,10) + '.xlsx');
+});
+
+// ================================================================
+// NEW ENTRY
+// ================================================================
+$('#btnAdd')?.addEventListener('click', () => {
+  if(role !== 'admin') return;
+  const sheet = cur;
+  const html = FIELDS.map(f => `<label>${esc(f)}<input data-k="${FIELD_KEYS[f]}"></label>`).join('');
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `<div class="modal-box"><h3>➕ New — ${SHEET_NAMES[sheet]}</h3>
+    <div class="form">${html}</div>
+    <div class="modal-foot"><button class="cancel">Cancel</button><button class="primary save">Save</button></div></div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('.cancel').onclick = () => modal.remove();
+  modal.querySelector('.save').onclick = async () => {
+    const o = { sheet };
+    modal.querySelectorAll('input[data-k]').forEach(i => o[i.dataset.k] = i.value.trim());
+    if(!Object.values(o).some(v => v && v !== sheet)){ alert('Fill at least one field'); return; }
+    if(!o.entered_at) o.entered_at = new Date().toISOString();
+    const { error } = await sb.from('records').insert(o);
+    if(error){ alert(error.message); return; }
+    modal.remove();
+    await loadRecords();
+    renderAll();
+  };
+});
 
 // ================================================================
 // NAV
@@ -464,47 +500,7 @@ async function renderDash(){
 }
 
 // ================================================================
-// NEW ENTRY
-// ================================================================
-$('#btnAdd')?.addEventListener('click', () => {
-  if(role !== 'admin') return;
-  const sheet = cur;
-  const html = FIELDS.map(f => `<label>${esc(f)}<input data-k="${FIELD_KEYS[f]}"></label>`).join('');
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.innerHTML = `<div class="modal-box"><h3>➕ New — ${SHEET_NAMES[sheet]}</h3>
-    <div class="form">${html}</div>
-    <div class="modal-foot"><button class="cancel">Cancel</button><button class="primary save">Save</button></div></div>`;
-  document.body.appendChild(modal);
-  modal.querySelector('.cancel').onclick = () => modal.remove();
-  modal.querySelector('.save').onclick = async () => {
-    const o = { sheet };
-    modal.querySelectorAll('input[data-k]').forEach(i => o[i.dataset.k] = i.value.trim());
-    if(!Object.values(o).some(v => v && v !== sheet)){ alert('Fill at least one field'); return; }
-    if(!o.entered_at) o.entered_at = new Date().toISOString();
-    const { error } = await sb.from('records').insert(o);
-    if(error){ alert(error.message); return; }
-    modal.remove();
-    await loadRecords();
-    renderAll();
-  };
-});
-
-// ================================================================
-// EXPORT
-// ================================================================
-$('#btnExport')?.addEventListener('click', async () => {
-  const wb = XLSX.utils.book_new();
-  for(const k of ['dankotuwa','royal']){
-    const { data } = await sb.from('records').select('*').eq('sheet', k);
-    const aoa = [FIELDS, ...(data||[]).map(r => FIELDS.map(f => r[FIELD_KEYS[f]]||''))];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), SHEET_NAMES[k]);
-  }
-  XLSX.writeFile(wb, 'Check_Sheet_' + new Date().toISOString().slice(0,10) + '.xlsx');
-});
-
-// ================================================================
-// AI BOT
+// AI BOT & VOICE
 // ================================================================
 const FIELD_ALIASES = {
   'job no':'JOB NO','jobno':'JOB NO','job number':'JOB NO',
@@ -613,21 +609,76 @@ async function handleGuidedAnswer(q){
   return `✅ ${f} = "${q}" saved.\n\n` + guidedQuestion();
 }
 
-function miniTable(rows, limit=12){
-  if(!rows.length) return '';
-  const cols = ['job_no','veh_no','inv_no','amount','job_status','chk_date'];
-  const names = ['JOB','VEH','INV','AMOUNT','STATUS','DATE'];
-  let h = '<table><thead><tr>' + names.map(n=>`<th>${n}</th>`).join('') + '</tr></thead><tbody>';
-  rows.slice(0,limit).forEach(r => {
-    h += '<tr>' + cols.map(c => {
-      let v = r[c] || '';
-      if(c==='amount' && v) v = money(num(v));
-      return `<td>${esc(v)}</td>`;
-    }).join('') + '</tr>';
+// -------- Print Function --------
+function printTable(rows) {
+  let html = `<html><head><title>Print Report</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #000; padding: 6px; text-align: left; }
+    th { background: #ddd; }
+  </style></head><body>
+  <h2>Check Sheet Report - ${SHEET_NAMES[cur]}</h2>
+  <p>Date: ${new Date().toLocaleDateString()}</p>
+  <table><tr>
+    <th>Job No</th><th>Job Date</th><th>Veh No</th><th>Customer</th><th>Inv No</th>
+    <th>Chk Date</th><th>Remarks</th><th>Job Status</th><th>Handover To</th>
+  </tr>`;
+  rows.forEach(r => {
+    html += `<tr>
+      <td>${esc(r.job_no||'')}</td><td>${esc(r.jb_date||'')}</td><td>${esc(r.veh_no||'')}</td>
+      <td>${esc(r.customer||'')}</td><td>${esc(r.inv_no||'')}</td><td>${esc(r.chk_date||'')}</td>
+      <td>${esc(r.remarks||'')}</td><td>${esc(r.job_status||'')}</td><td>${esc(r.handover_to||'')}</td>
+    </tr>`;
   });
-  h += '</tbody></table>';
-  if(rows.length > limit) h += `<small style="color:#94a3b8">...තව ${rows.length-limit}</small>`;
-  return h;
+  html += `</table></body></html>`;
+  
+  const win = window.open('', '', 'width=1000,height=800');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); win.close(); }, 500);
+}
+
+// -------- Format Full Details --------
+function formatFullDetails(rows) {
+  if (rows.length === 0) return "";
+  if (rows.length === 1) {
+    const r = rows[0];
+    return `📄 **Details for INV: ${r.inv_no}**\n\n` +
+           `• **Job No:** ${r.job_no || '-'}\n` +
+           `• **Job Date:** ${r.jb_date || '-'}\n` +
+           `• **Veh No:** ${r.veh_no || '-'}\n` +
+           `• **Customer:** ${r.customer || '-'}\n` +
+           `• **Inv No:** ${r.inv_no || '-'}\n` +
+           `• **Chk Date:** ${r.chk_date || '-'}\n` +
+           `• **Remarks:** ${r.remarks || '-'}\n` +
+           `• **Job Status:** ${r.job_status || '-'}\n` +
+           `• **Handover To:** ${r.handover_to || '-'}`;
+  }
+  
+  let tableHtml = `<div style="overflow-x:auto"><table style="width:100%;font-size:12px;margin-top:10px;border-collapse:collapse;border:1px solid #e2e8f0">
+    <thead><tr style="background:#f1f5f9">
+      <th style="padding:5px;border:1px solid #e2e8f0">Job No</th><th style="padding:5px;border:1px solid #e2e8f0">Date</th><th style="padding:5px;border:1px solid #e2e8f0">Veh</th><th style="padding:5px;border:1px solid #e2e8f0">Customer</th><th style="padding:5px;border:1px solid #e2e8f0">Inv No</th><th style="padding:5px;border:1px solid #e2e8f0">Status</th>
+    </tr></thead><tbody>`;
+  rows.forEach(r => {
+    tableHtml += `<tr>
+      <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.job_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.jb_date||'-')}</td>
+      <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.veh_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.customer||'-')}</td>
+      <td style="padding:5px;border:1px solid #e2e8f0">${esc(r.inv_no||'-')}</td><td style="padding:5px;border:1px solid #e2e8f0">${esc(r.job_status||'-')}</td>
+    </tr>`;
+  });
+  tableHtml += `</tbody></table></div>`;
+  
+  const printBtnId = 'print_btn_' + Date.now();
+  setTimeout(() => {
+    const btn = document.getElementById(printBtnId);
+    if(btn) btn.onclick = () => printTable(rows);
+  }, 100);
+
+  return `📋 Found **${rows.length}** records.<br>` +
+         `<button id="${printBtnId}" style="margin-top:8px;padding:6px 12px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600">🖨️ Print Results</button>` +
+         tableHtml;
 }
 
 async function botQuery(qRaw){
@@ -637,13 +688,10 @@ async function botQuery(qRaw){
   let src = cur;
   if(/royal/.test(q)) src='royal';
   else if(/dankotuwa|danktw|dnktw/.test(q)) src='dankotuwa';
-  
-  // Database error check
-  const { data, error } = await sb.from('records').select('*').eq('sheet', src);
-  if (error) return "❌ Database Error: " + error.message;
-  
+  const { data } = await sb.from('records').select('*').eq('sheet', src);
   const rows = data||[];
   if(!rows.length) return `⚠️ ${SHEET_NAMES[src]} හි දත්ත නැහැ. (Excel Import කරලා තියෙනවද බලන්න)`;
+  
   let filtered = rows.slice();
   const desc = [];
   const vm = qRaw.match(/\b([A-Za-z]{1,3})[\s\-]?(\d{3,4})\b/);
@@ -653,6 +701,7 @@ async function botQuery(qRaw){
   if(/seal/.test(q) && /(no|missing|issue|dif|❌)/.test(q)){ filtered = filtered.filter(r => /❌/.test(r.customer_seal||'')); desc.push('Seal issues'); }
   const im = qRaw.match(/\b(\d{6,12})\b/);
   if(im && !vm){ filtered = filtered.filter(r => norm(r.inv_no).includes(im[1])); desc.push('INV '+im[1]); }
+  
   const ftxt = desc.length ? ' `('+desc.join(', ')+')`' : '';
   if(/most|top|highest/.test(q) && /vehicle|lorry|veh/.test(q)){
     const m = {};
@@ -661,18 +710,20 @@ async function botQuery(qRaw){
     if(!s.length) return 'දත්ත නැහැ.';
     return `🚚 Top vehicles — ${SHEET_NAMES[src]}${ftxt}\n\n` + s.map(([v,c],i)=>`${i+1}. **${v}** — ${c}`).join('\n');
   }
+  
   const wantSum = /total|sum|amount|mudal/.test(q);
   const wantCount = /how many|count|keeyak|kiyak|ganana/.test(q);
   const wantList = /list|show|pennanna|details|which|mona/.test(q);
+  
   if(wantSum || wantCount){
     const t = filtered.reduce((a,r)=>a+num(r.amount),0);
     let out = `📊 **${SHEET_NAMES[src]}**${ftxt}\n• Records: **${filtered.length}**\n• Amount: **Rs ${money(t)}**`;
-    if(wantList && filtered.length<=20) out += '\n' + miniTable(filtered, 10);
+    if(wantList && filtered.length<=20) out += '\n\n' + formatFullDetails(filtered);
     return out;
-  } 
+  }
+  
   if(!filtered.length) return `🔍 "${qRaw}" — ප්‍රතිඵල නැහැ.`;
-  {
-  // අලුත් විස්තර සහ Print බටන් එක පෙන්නනවා
+  
   const t = filtered.reduce((a,r)=>a+num(r.amount),0);
   let summary = `📋 **${SHEET_NAMES[src]}**${ftxt}\nRecords: **${filtered.length}** | Total: **Rs ${money(t)}**\n\n`;
   return summary + formatFullDetails(filtered);
@@ -716,8 +767,9 @@ function addMsg(text, who){
   div.innerHTML = who==='bot' ? text.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>') : esc(text);
   $('#chatLog').appendChild(div);
   $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
-  return div; // <--- මේ පේළිය අලුතින් එකතු කරන්න
+  return div;
 }
+
 async function sendChat(){
   const box = $('#chatBox'), q = box.value.trim();
   if(!q) return;
@@ -725,22 +777,20 @@ async function sendChat(){
   const loading = addMsg('⏳...', 'bot');
   
   try {
-    // 15 seconds timeout
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error("Request timed out. Please check your internet or Supabase project status.")), 15000)
     );
-    
     let ans = await Promise.race([handleChat(q), timeoutPromise]);
     if(typeof ans !== 'string') ans = String(ans);
     loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-        loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-    speakText(ans); // <--- මේක අලුතින් එකතු කරන්න
+    speakText(ans);
   } catch(e) { 
     loading.innerHTML = '❌ Error: ' + esc(e.message);
     console.error(e);
   }
   $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
 }
+
 $('#chatSend')?.addEventListener('click', sendChat);
 $('#chatBox')?.addEventListener('keydown', e => { if(e.key==='Enter') sendChat(); });
 
@@ -754,15 +804,11 @@ function updateBotChips(){
   }));
 }
 
-function renderAll(){
-  if($('#tab-dash').classList.contains('active')) renderDash();
-  if($('#tab-grid').classList.contains('active')) renderGrid();
-}
+// -------- Voice (Mic & TTS) --------
 let ttsEnabled = false;
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-// Speaker Toggle
-$('#ttsToggle').addEventListener('click', () => {
+$('#ttsToggle')?.addEventListener('click', () => {
   ttsEnabled = !ttsEnabled;
   $('#ttsToggle').innerText = ttsEnabled ? '🔊' : '🔇';
   $('#ttsToggle').style.background = ttsEnabled ? '#15803d' : '#64748b';
@@ -772,23 +818,21 @@ $('#ttsToggle').addEventListener('click', () => {
 function speakText(text) {
   if(!ttsEnabled) return;
   window.speechSynthesis.cancel();
-  // Markdown සහ Emojis අයින් කරලා කියවන්න
   let clean = text.replace(/[*#•]/g, '').replace(/<[^>]*>/g, '').replace(/Rs/g, 'Rupees ');
   const utt = new SpeechSynthesisUtterance(clean);
-  utt.lang = 'en-US'; // Sinhala ඕන නම් 'si-LK' දාන්න
+  utt.lang = 'en-US';
   utt.rate = 1.0;
   window.speechSynthesis.speak(utt);
 }
 
-// Mic (Speech to Text)
 if(SpeechRecognition) {
   const recog = new SpeechRecognition();
   recog.lang = 'en-US';
   recog.interimResults = false;
   recog.maxAlternatives = 1;
   
-  $('#micBtn').addEventListener('click', () => {
-    $('#micBtn').style.background = '#dc2626'; // Red while recording
+  $('#micBtn')?.addEventListener('click', () => {
+    $('#micBtn').style.background = '#dc2626';
     $('#chatBox').placeholder = "🎤 අහගෙන ඉන්නවා...";
     recog.start();
   });
@@ -807,84 +851,15 @@ if(SpeechRecognition) {
     alert("Mic error: කරුණාකර Chrome බ්‍රව්සර් එක පාවිච්චි කරන්න.");
   };
 } else {
-  $('#micBtn').style.display = 'none';
+  $('#micBtn') && ($('#micBtn').style.display = 'none');
 }
+
+function renderAll(){
+  if($('#tab-dash').classList.contains('active')) renderDash();
+  if($('#tab-grid').classList.contains('active')) renderGrid();
+}
+
 initAuth();
 </script>
 </body>
 </html>
-function formatFullDetails(rows) {
-  if (rows.length === 0) return "";
-  if (rows.length === 1) {
-    const r = rows[0];
-    return `📄 **Details for INV: ${r.inv_no}**\n\n` +
-           `• **Job No:** ${r.job_no || '-'}\n` +
-           `• **Job Date:** ${r.jb_date || '-'}\n` +
-           `• **Veh No:** ${r.veh_no || '-'}\n` +
-           `• **Customer:** ${r.customer || '-'}\n` +
-           `• **Inv No:** ${r.inv_no || '-'}\n` +
-           `• **Chk Date:** ${r.chk_date || '-'}\n` +
-           `• **Remarks:** ${r.remarks || '-'}\n` +
-           `• **Job Status:** ${r.job_status || '-'}\n` +
-           `• **Handover To:** ${r.handover_to || '-'}`;
-  }
-  
-  // එකකට වඩා තියෙනවා නම් Table එකක් හදනවා + Print Button එකක්
-  let tableHtml = `<table style="width:100%;font-size:12px;margin-top:10px;border-collapse:collapse" border="1">
-    <thead><tr style="background:#e2e8f0">
-      <th>Job No</th><th>Date</th><th>Veh</th><th>Customer</th><th>Inv No</th><th>Status</th>
-    </tr></thead><tbody>`;
-  rows.forEach(r => {
-    tableHtml += `<tr>
-      <td>${esc(r.job_no||'-')}</td><td>${esc(r.jb_date||'-')}</td>
-      <td>${esc(r.veh_no||'-')}</td><td>${esc(r.customer||'-')}</td>
-      <td>${esc(r.inv_no||'-')}</td><td>${esc(r.job_status||'-')}</td>
-    </tr>`;
-  });
-  tableHtml += `</tbody></table>`;
-  
-  const printBtnId = 'print_btn_' + Date.now();
-  setTimeout(() => {
-    const btn = document.getElementById(printBtnId);
-    if(btn) btn.onclick = () => printTable(rows);
-  }, 100);
-
-  return `📋 Found **${rows.length}** records.<br>` +
-         `<button id="${printBtnId}" style="margin-top:8px;padding:5px 10px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">🖨️ Print Results</button>` +
-         tableHtml;
-}
-
-function printTable(rows) {
-  let html = `<html><head><title>Print Report</title>
-  <style>
-    body { font-family: 'Segoe UI', sans-serif; font-size: 12px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #000; padding: 6px; text-align: left; }
-    th { background: #ddd; }
-  </style></head><body>
-  <h2>Check Sheet Report - ${SHEET_NAMES[cur]}</h2>
-  <p>Date: ${new Date().toLocaleDateString()}</p>
-  <table><tr>
-    <th>Job No</th><th>Job Date</th><th>Veh No</th><th>Customer</th><th>Inv No</th>
-    <th>Chk Date</th><th>Remarks</th><th>Job Status</th><th>Handover To</th>
-  </tr>`;
-  
-  rows.forEach(r => {
-    html += `<tr>
-      <td>${esc(r.job_no||'')}</td><td>${esc(r.jb_date||'')}</td><td>${esc(r.veh_no||'')}</td>
-      <td>${esc(r.customer||'')}</td><td>${esc(r.inv_no||'')}</td><td>${esc(r.chk_date||'')}</td>
-      <td>${esc(r.remarks||'')}</td><td>${esc(r.job_status||'')}</td><td>${esc(r.handover_to||'')}</td>
-    </tr>`;
-  });
-  html += `</table></body></html>`;
-  
-  const win = window.open('', '', 'width=1000,height=800');
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); win.close(); }, 500);
-}
-
-
-
-
