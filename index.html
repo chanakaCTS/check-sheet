@@ -629,12 +629,17 @@ async function botQuery(qRaw){
   const q = qRaw.toLowerCase().trim();
   if(!q) return 'ප්‍රශ්නයක් අහන්න 🙂';
   if(/^(help|උදව්|mokakda|what can)/.test(q)) return HELP_TEXT;
+  
   let src = cur;
   if(/royal/.test(q)) src='royal';
   else if(/dankotuwa|danktw|dnktw/.test(q)) src='dankotuwa';
-  const { data } = await sb.from('records').select('*').eq('sheet', src);
+  
+  // Database error check
+  const { data, error } = await sb.from('records').select('*').eq('sheet', src);
+  if (error) return "❌ Database Error: " + error.message;
+  
   const rows = data||[];
-  if(!rows.length) return `⚠️ ${SHEET_NAMES[src]} හි දත්ත නැහැ.`;
+  if(!rows.length) return `⚠️ ${SHEET_NAMES[src]} හි දත්ත නැහැ. (Excel Import කරලා තියෙනවද බලන්න)`;
   let filtered = rows.slice();
   const desc = [];
   const vm = qRaw.match(/\b([A-Za-z]{1,3})[\s\-]?(\d{3,4})\b/);
@@ -711,14 +716,22 @@ async function sendChat(){
   if(!q) return;
   addMsg(q, 'user'); box.value = '';
   const loading = addMsg('⏳...', 'bot');
+  
   try {
-    let ans = await handleChat(q);
+    // 15 seconds timeout
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Request timed out. Please check your internet or Supabase project status.")), 15000)
+    );
+    
+    let ans = await Promise.race([handleChat(q), timeoutPromise]);
     if(typeof ans !== 'string') ans = String(ans);
     loading.innerHTML = ans.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-  } catch(e){ loading.innerHTML = '❌ ' + esc(e.message); }
+  } catch(e) { 
+    loading.innerHTML = '❌ Error: ' + esc(e.message);
+    console.error(e);
+  }
   $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
 }
-
 $('#chatSend')?.addEventListener('click', sendChat);
 $('#chatBox')?.addEventListener('keydown', e => { if(e.key==='Enter') sendChat(); });
 
